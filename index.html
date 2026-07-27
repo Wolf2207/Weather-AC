@@ -287,6 +287,7 @@ h3.titel{font-size:14px;font-weight:650;letter-spacing:-.1px;margin-bottom:10px}
       <div id="vorschlaege" class="weg"></div>
     </div>
     <div id="kopfknoepfe">
+      <button class="knopf" id="btnWebcam" title="Webcams in der Umgebung">📷</button>
       <button class="knopf" id="btnOrtung" title="Aktueller Standort">📍</button>
       <button class="knopf" id="btnNeu" title="Neu laden">↻</button>
     </div>
@@ -434,7 +435,7 @@ h3.titel{font-size:14px;font-weight:650;letter-spacing:-.1px;margin-bottom:10px}
    wie sicher sich diese drei eigentlich sind.
    ========================================================= */
 
-const VERSION = "3.0";
+const VERSION = "3.1";
 const $ = id => document.getElementById(id);
 
 /* ---------- Modelle ---------- */
@@ -684,6 +685,12 @@ $("btnOrtung").onclick = () => {
     };
     ladeAlles();
   }, () => hinweis("Standort nicht verfügbar – bitte Ort suchen", 3600), { timeout:8000 });
+};
+
+$("btnWebcam").onclick = () => {
+  const o = zustand.ort;
+  const suche = "Webcam " + o.name + " " + (o.region || o.land || "") + " live";
+  window.open("https://www.google.com/search?q=" + encodeURIComponent(suche.trim()), "_blank");
 };
 
 $("btnNeu").onclick = () => { hinweis("Wird aktualisiert …"); ladeAlles(); };
