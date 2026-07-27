@@ -3,569 +3,1361 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Wetter-Konsens v9.1</title>
+<title>Weather AC</title>
+<meta name="theme-color" content="#0b1a26">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Wetter">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
-  :root{
-    --panel: rgba(10, 25, 50, 0.38);
-    --panel-line: rgba(255,255,255,0.10);
-    --txt: #f2f6fc;
-    --txt-dim: rgba(242,246,252,0.72);
-    --txt-faint: rgba(242,246,252,0.5);
-    --accent: #8ec5ff;
-    --ok: #6fd58a;
-    --mid: #f2c14e;
-    --bad: #f07b6b;
-  }
-  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
-  html,body{height:100%;}
-  body{
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    color: var(--txt);
-    min-height: 100dvh;
-    overflow-x: hidden;
-    background: linear-gradient(180deg,#20365c 0%,#31507e 55%,#49688f 100%);
-    transition: background 1.2s ease;
-  }
-  /* ---- Hintergrund-Themen (Ortszeit + Witterung) ---- */
-  body.bg-day-clear   {background: linear-gradient(180deg,#2e6fb8 0%,#5d9ad3 55%,#9cc4e4 100%);}
-  body.bg-day-cloud   {background: linear-gradient(180deg,#3a5578 0%,#5a7494 55%,#8296ac 100%);}
-  body.bg-day-rain    {background: linear-gradient(180deg,#2c3e56 0%,#46586e 55%,#5f7183 100%);}
-  body.bg-dawn        {background: linear-gradient(180deg,#2b3a66 0%,#7c5a7e 60%,#d98e6a 100%);}
-  body.bg-night-clear {background: linear-gradient(180deg,#060d1f 0%,#101c38 60%,#1c2c4e 100%);}
-  body.bg-night-cloud {background: linear-gradient(180deg,#0b1220 0%,#1a2334 60%,#28344a 100%);}
-  body.bg-night-rain  {background: linear-gradient(180deg,#090e18 0%,#141c2a 60%,#1e2836 100%);}
+:root{
+  --line:rgba(255,255,255,.14);
+  --line-soft:rgba(255,255,255,.08);
+  --glass:rgba(6,22,34,.36);
+  --glass-2:rgba(6,22,34,.5);
+  --txt:#f0f5fa;
+  --dim:rgba(240,245,250,.72);
+  --faint:rgba(240,245,250,.46);
+  --cyan:#6fd3e8;
+  --gruen:#7fd6a0;
+  --gelb:#f2c46a;
+  --rot:#e4776b;
+  --r:16px;
+  --schatten:0 14px 40px rgba(0,0,0,.22);
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{min-height:100%}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;
+  color:var(--txt);
+  background:#0b1a26;
+  overflow-x:hidden;
+  font-variant-numeric:tabular-nums;
+}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer;background:none;border:0}
+.weg{display:none !important}
 
-  #sky{position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden;}
-  .stars{position:absolute;inset:0;opacity:0;transition:opacity 1.2s ease;
-    background-image:
-      radial-gradient(1px 1px at 12% 18%, #fff 55%, transparent 60%),
-      radial-gradient(1px 1px at 28% 42%, #dfe9ff 55%, transparent 60%),
-      radial-gradient(1.5px 1.5px at 44% 12%, #fff 55%, transparent 60%),
-      radial-gradient(1px 1px at 61% 33%, #cfe0ff 55%, transparent 60%),
-      radial-gradient(1.5px 1.5px at 74% 15%, #fff 55%, transparent 60%),
-      radial-gradient(1px 1px at 86% 40%, #e8f0ff 55%, transparent 60%),
-      radial-gradient(1px 1px at 52% 55%, #fff 55%, transparent 60%),
-      radial-gradient(1.5px 1.5px at 92% 62%, #dfe9ff 55%, transparent 60%),
-      radial-gradient(1px 1px at 8% 66%, #fff 55%, transparent 60%);
-  }
-  body[class*="bg-night"] .stars{opacity:.9;}
-  .cloudblob{position:absolute;border-radius:50%;filter:blur(46px);opacity:0;transition:opacity 1.2s ease;background:rgba(255,255,255,0.16);}
-  .cb1{width:46vw;height:20vh;top:8%;left:-12%;animation:drift1 90s linear infinite;}
-  .cb2{width:38vw;height:16vh;top:30%;left:55%;animation:drift2 120s linear infinite;}
-  body.bg-day-cloud .cloudblob, body.bg-day-rain .cloudblob,
-  body.bg-night-cloud .cloudblob, body.bg-night-rain .cloudblob{opacity:.55;}
-  body[class*="bg-night"] .cloudblob{background:rgba(160,180,210,0.10);}
-  @keyframes drift1{from{transform:translateX(0);}to{transform:translateX(120vw);}}
-  @keyframes drift2{from{transform:translateX(0);}to{transform:translateX(-130vw);}}
-  @media (prefers-reduced-motion: reduce){.cloudblob{animation:none;}}
+/* ---------- Himmel ---------- */
+#szene{position:fixed;inset:0;z-index:0;overflow:hidden;
+  background:linear-gradient(170deg,#1c4468 0%,#2f6389 48%,#18314a 100%);
+  transition:background 1.4s ease}
+#szene.tag-klar   {background:linear-gradient(170deg,#2a6ea8 0%,#5b9bcd 52%,#9ac6e2 100%)}
+#szene.tag-wolke  {background:linear-gradient(170deg,#3b5772 0%,#5c7791 52%,#849aae 100%)}
+#szene.tag-regen  {background:linear-gradient(170deg,#2b3d52 0%,#44576b 52%,#5d7080 100%)}
+#szene.daemmerung {background:linear-gradient(170deg,#26355f 0%,#78587c 58%,#d68e6c 100%)}
+#szene.nacht-klar {background:linear-gradient(170deg,#05101f 0%,#0f1d38 58%,#1b2c4c 100%)}
+#szene.nacht-wolke{background:linear-gradient(170deg,#0a1220 0%,#192233 58%,#26324a 100%)}
+#szene.nacht-regen{background:linear-gradient(170deg,#080d17 0%,#131b28 58%,#1d2735 100%)}
+#fx{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.sterne{position:absolute;inset:0;opacity:0;transition:opacity 1.4s ease;
+  background-image:
+    radial-gradient(1px 1px at 11% 17%,#fff 55%,transparent 60%),
+    radial-gradient(1px 1px at 27% 41%,#dce8ff 55%,transparent 60%),
+    radial-gradient(1.4px 1.4px at 43% 11%,#fff 55%,transparent 60%),
+    radial-gradient(1px 1px at 60% 32%,#cfe0ff 55%,transparent 60%),
+    radial-gradient(1.4px 1.4px at 73% 14%,#fff 55%,transparent 60%),
+    radial-gradient(1px 1px at 85% 39%,#e8f0ff 55%,transparent 60%),
+    radial-gradient(1px 1px at 51% 54%,#fff 55%,transparent 60%),
+    radial-gradient(1.4px 1.4px at 91% 61%,#dce8ff 55%,transparent 60%),
+    radial-gradient(1px 1px at 7% 65%,#fff 55%,transparent 60%)}
+#szene[class*="nacht"] .sterne{opacity:.85}
+.wolke{position:absolute;border-radius:50%;filter:blur(44px);opacity:0;
+  background:rgba(255,255,255,.16);transition:opacity 1.4s ease}
+.w1{width:46vw;height:19vh;top:7%;left:-14%;animation:zieh1 96s linear infinite}
+.w2{width:37vw;height:15vh;top:31%;left:58%;animation:zieh2 128s linear infinite}
+#szene.tag-wolke .wolke,#szene.tag-regen .wolke,
+#szene.nacht-wolke .wolke,#szene.nacht-regen .wolke{opacity:.5}
+#szene[class*="nacht"] .wolke{background:rgba(160,180,210,.1)}
+@keyframes zieh1{from{transform:translateX(0)}to{transform:translateX(125vw)}}
+@keyframes zieh2{from{transform:translateX(0)}to{transform:translateX(-135vw)}}
+.tropfen{position:absolute;width:2px;height:26px;border-radius:2px;
+  background:linear-gradient(transparent,rgba(174,220,255,.85));animation:fall linear infinite}
+@keyframes fall{from{transform:translateY(-30vh)}to{transform:translateY(115vh)}}
+.flocke{position:absolute;font-size:15px;opacity:.85;animation:rieseln linear infinite}
+@keyframes rieseln{from{transform:translateY(-12vh) translateX(0)}to{transform:translateY(112vh) translateX(40px)}}
+@media (prefers-reduced-motion:reduce){
+  .wolke,.tropfen,.flocke{animation:none}
+  .tropfen,.flocke{display:none}
+}
 
-  /* ---- Layout ---- */
-  #app{max-width:1180px;margin:0 auto;padding:calc(14px + env(safe-area-inset-top)) 14px calc(24px + env(safe-area-inset-bottom));}
-  header{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px;}
-  #ortName{font-size:1.35rem;font-weight:700;letter-spacing:.2px;flex:1 1 auto;min-width:140px;}
-  #ortName small{display:block;font-size:.72rem;font-weight:500;color:var(--txt-faint);}
-  .iconbtn{
-    border:1px solid var(--panel-line);background:var(--panel);color:var(--txt);
-    border-radius:12px;padding:9px 14px;font-size:.9rem;font-weight:600;cursor:pointer;
-    backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
-  }
-  .iconbtn:active{transform:scale(.97);}
-  .iconbtn:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
-  .iconbtn.aktiv{background:rgba(142,197,255,0.25);border-color:var(--accent);}
+/* ---------- Gerüst ---------- */
+#app{position:relative;z-index:2;width:min(1240px,100% - 20px);margin:0 auto;
+  padding:max(12px,env(safe-area-inset-top)) 0 calc(28px + env(safe-area-inset-bottom))}
+.glas{background:var(--glass);border:1px solid var(--line);border-radius:var(--r);
+  backdrop-filter:blur(14px) saturate(130%);-webkit-backdrop-filter:blur(14px) saturate(130%);
+  box-shadow:var(--schatten)}
+.eyebrow{font-size:10px;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--faint);font-weight:700}
+h3.titel{font-size:14px;font-weight:650;letter-spacing:-.1px;margin-bottom:10px}
 
-  #suchbox{display:none;margin-bottom:12px;}
-  #suchbox.offen{display:block;}
-  #suchfeld{
-    width:100%;padding:12px 14px;font-size:1rem;border-radius:12px;color:var(--txt);
-    border:1px solid var(--panel-line);background:var(--panel);
-    backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
-  }
-  #suchfeld::placeholder{color:var(--txt-faint);}
-  #suchfeld:focus{outline:2px solid var(--accent);}
-  #kandidaten{margin-top:8px;display:flex;flex-direction:column;gap:6px;}
-  .kandidat{
-    text-align:left;border:1px solid var(--panel-line);background:var(--panel);color:var(--txt);
-    border-radius:12px;padding:11px 14px;font-size:.95rem;cursor:pointer;
-  }
-  .kandidat small{color:var(--txt-faint);display:block;font-size:.75rem;}
-  .kandidat:active{background:rgba(142,197,255,0.2);}
+/* ---------- Kopf ---------- */
+#kopf{padding:12px 14px;margin-bottom:10px;position:relative;z-index:60;
+  display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center}
+#marke h1{font-size:20px;font-weight:700;letter-spacing:-.5px;line-height:1.1}
+#marke h1 i{font-style:normal;color:var(--cyan)}
+#suchfeld-wrap{position:relative;z-index:70}
+#suchfeld{width:100%;padding:10px 13px;border-radius:12px;
+  border:1px solid var(--line);background:rgba(4,18,28,.4)}
+#suchfeld::placeholder{color:var(--faint)}
+#suchfeld:focus{outline:2px solid var(--cyan);outline-offset:1px}
+#vorschlaege{position:absolute;top:calc(100% + 6px);left:0;right:0;z-index:9999;
+  border-radius:12px;border:1px solid var(--line);overflow:hidden auto;
+  max-height:min(340px,46vh);background:rgba(6,26,38,.97);
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:var(--schatten)}
+.vorschlag{display:block;width:100%;text-align:left;padding:11px 13px;
+  border-bottom:1px solid var(--line-soft);font-size:14px}
+.vorschlag:last-child{border-bottom:0}
+.vorschlag small{display:block;color:var(--faint);font-size:11px;margin-top:2px}
+.vorschlag:hover,.vorschlag:focus{background:rgba(111,211,232,.18);outline:none}
+.knopf{border:1px solid var(--line);background:rgba(255,255,255,.07);
+  border-radius:11px;padding:9px 12px;font-size:13px;font-weight:600;white-space:nowrap}
+.knopf:active{transform:scale(.97)}
+.knopf:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+.knopf.aktiv{background:rgba(111,211,232,.24);border-color:var(--cyan)}
+#kopfknoepfe{display:flex;gap:6px}
 
-  #inhalt{display:grid;grid-template-columns:300px 1fr;gap:14px;align-items:start;}
-  @media (max-width:760px){#inhalt{grid-template-columns:1fr;}}
+/* ---------- Hero ---------- */
+#hero{padding:16px 18px;margin-bottom:10px;display:grid;
+  grid-template-columns:1.15fr .85fr;gap:20px;align-items:center}
+#ortzeile{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+#ortname{font-size:26px;font-weight:650;letter-spacing:-.6px;line-height:1.15}
+#ortzeit{color:var(--dim);font-size:12.5px;margin-top:4px}
+#stern{font-size:24px;line-height:1;padding:2px 4px}
+#heromitte{display:flex;align-items:center;gap:14px;margin-top:14px}
+#grad{font-size:76px;font-weight:200;letter-spacing:-4px;line-height:.9}
+#lage{font-size:16px;font-weight:600;margin-top:2px}
+#gefuehlt{font-size:12.5px;color:var(--dim);margin-top:3px}
+#hauptikon{font-size:64px;line-height:1;margin-left:auto}
+#messwerte{display:grid;grid-template-columns:repeat(2,1fr);gap:7px}
+.mw{border:1px solid var(--line-soft);border-radius:11px;padding:8px 10px;
+  background:rgba(255,255,255,.045)}
+.mw label{display:block;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+.mw strong{font-size:15px;font-weight:600;display:block;margin-top:2px}
 
-  .karte{
-    background:var(--panel);border:1px solid var(--panel-line);border-radius:18px;
-    backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
-  }
+/* ---------- Nowcast ---------- */
+#nowcast{padding:12px 14px;margin-bottom:10px}
+#nowtext{font-size:13.5px;font-weight:600;margin:6px 0 9px}
+#nowbalken{display:flex;gap:3px;height:36px;align-items:flex-end}
+.nowblock{flex:1;border-radius:4px 4px 2px 2px;background:rgba(255,255,255,.09);
+  position:relative;min-height:4px;transition:height .4s ease}
+.nowblock i{position:absolute;inset:0;border-radius:inherit;background:var(--cyan);opacity:.85}
+#nowskala{display:flex;justify-content:space-between;font-size:10px;color:var(--faint);margin-top:5px}
 
-  /* Aktuell-Panel */
-  #aktuell{padding:18px;position:sticky;top:12px;}
-  @media (max-width:760px){#aktuell{position:static;}}
-  #aktuell .kopf{font-size:.78rem;text-transform:uppercase;letter-spacing:.12em;color:var(--txt-faint);margin-bottom:6px;}
-  #aktIcon{font-size:3rem;line-height:1;}
-  #aktTemp{font-size:3.6rem;font-weight:200;letter-spacing:-1px;}
-  #aktCond{font-size:1.05rem;font-weight:600;margin-bottom:12px;}
-  .aktzeile{display:flex;justify-content:space-between;font-size:.88rem;padding:6px 0;border-top:1px solid var(--panel-line);}
-  .aktzeile span:first-child{color:var(--txt-dim);}
-  #stand{font-size:.72rem;color:var(--txt-faint);margin-top:12px;line-height:1.5;}
+/* ---------- Konsensband (Signature) ---------- */
+#bandkarte{padding:14px;margin-bottom:10px}
+#bandkopf{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
+#bandhinweis{font-size:11.5px;color:var(--faint)}
+#band{width:100%;height:auto;display:block;margin-top:8px;overflow:visible}
+#bandlegende{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--dim);margin-top:8px}
+#bandlegende span{display:flex;align-items:center;gap:5px}
+.pkt{width:9px;height:9px;border-radius:50%;display:inline-block;flex:0 0 auto}
+.p-ok{background:var(--gruen)}.p-mid{background:var(--gelb)}.p-bad{background:var(--rot)}
 
-  /* Tages-/Ansichtsschalter */
-  #leiste{display:flex;gap:8px;overflow-x:auto;padding-bottom:8px;margin-bottom:6px;scrollbar-width:none;}
-  #leiste::-webkit-scrollbar{display:none;}
-  .tag-chip{
-    flex:0 0 auto;border:1px solid var(--panel-line);background:var(--panel);color:var(--txt);
-    border-radius:12px;padding:8px 12px;font-size:.82rem;font-weight:600;cursor:pointer;text-align:center;
-  }
-  .tag-chip small{display:block;font-weight:400;color:var(--txt-faint);font-size:.7rem;}
-  .tag-chip.aktiv{background:rgba(142,197,255,0.25);border-color:var(--accent);}
+/* ---------- Stunden ---------- */
+#stundenkarte{padding:12px 0 6px;margin-bottom:10px}
+#stundenkopf{display:flex;justify-content:space-between;align-items:center;
+  gap:10px;padding:0 14px;margin-bottom:8px;flex-wrap:wrap}
+#tagleiste{display:flex;gap:6px;overflow-x:auto;padding:0 14px 8px;scrollbar-width:none}
+#tagleiste::-webkit-scrollbar{display:none}
+.tagchip{flex:0 0 auto;border:1px solid var(--line);border-radius:11px;
+  padding:6px 11px;font-size:12px;font-weight:600;text-align:center;background:rgba(255,255,255,.05)}
+.tagchip small{display:block;font-weight:400;font-size:9.5px;color:var(--faint)}
+.tagchip.aktiv{background:rgba(111,211,232,.24);border-color:var(--cyan)}
+#stunden{display:flex;gap:7px;overflow-x:auto;padding:2px 14px 10px;scrollbar-width:none}
+#stunden::-webkit-scrollbar{display:none}
+.stunde{flex:0 0 auto;width:76px;border:1px solid var(--line-soft);border-radius:13px;
+  padding:9px 6px;text-align:center;background:rgba(255,255,255,.05)}
+.stunde.jetzt{border-color:var(--cyan);background:rgba(111,211,232,.16)}
+.stunde.gewaehlt{outline:2px solid var(--cyan);outline-offset:-2px}
+.stunde time{display:block;font-size:11.5px;font-weight:650;color:var(--dim)}
+.stunde .ikon{font-size:23px;line-height:1.35}
+.stunde .temp{font-size:17px;font-weight:500}
+.stunde .zusatz{font-size:10px;color:var(--faint);line-height:1.45;margin-top:3px}
+.stunde .pkt{display:block;margin:5px auto 0}
 
-  /* Stundenliste */
-  .zeile{
-    display:grid;grid-template-columns:56px 44px 1fr auto;gap:10px;align-items:center;
-    padding:12px 14px;border-bottom:1px solid var(--panel-line);cursor:pointer;
-  }
-  .zeile:last-child{border-bottom:none;}
-  .zeile.jetzt{background:rgba(142,197,255,0.14);}
-  .z-zeit{font-size:.95rem;font-weight:600;}
-  .z-icon{font-size:1.6rem;text-align:center;}
-  .z-cond{font-weight:600;font-size:.98rem;}
-  .z-meta{font-size:.8rem;color:var(--txt-dim);display:flex;gap:12px;flex-wrap:wrap;margin-top:2px;align-items:center;}
-  .z-temp{font-size:1.5rem;font-weight:300;text-align:right;white-space:nowrap;}
-  .punkt{display:inline-block;width:8px;height:8px;border-radius:50%;vertical-align:middle;}
-  .p-ok{background:var(--ok);} .p-mid{background:var(--mid);} .p-bad{background:var(--bad);}
+/* ---------- Stundendetail ---------- */
+#detail{padding:14px;margin-bottom:10px}
+#detailkopf{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+#detailzeit{font-size:16px;font-weight:650}
+#detailtabelle{width:100%;border-collapse:collapse;font-size:13px}
+#detailtabelle th{text-align:left;font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--faint);font-weight:700;padding-bottom:6px}
+#detailtabelle td{padding:6px 0;border-top:1px solid var(--line-soft)}
+#detailtabelle td:nth-child(n+2){text-align:right;white-space:nowrap}
+#detailfazit{font-size:12.5px;color:var(--dim);margin-top:10px;line-height:1.5}
 
-  .modelle{display:none;grid-column:1 / -1;font-size:.8rem;color:var(--txt-dim);
-    border-top:1px dashed var(--panel-line);padding-top:8px;margin-top:4px;}
-  .zeile.offen .modelle{display:block;}
-  .modelle table{width:100%;border-collapse:collapse;}
-  .modelle td{padding:3px 4px;}
-  .modelle td:nth-child(2),.modelle td:nth-child(3){text-align:right;white-space:nowrap;}
+/* ---------- Kachelraster ---------- */
+#raster{display:grid;grid-template-columns:repeat(auto-fit,minmax(258px,1fr));
+  gap:10px;margin-bottom:10px;align-items:start}
+.kachel{padding:14px}
+.tagzeile{display:grid;grid-template-columns:38px 26px 1fr 74px;gap:8px;
+  align-items:center;padding:7px 0;border-bottom:1px solid var(--line-soft);
+  width:100%;text-align:left;font-size:12.5px}
+.tagzeile:last-child{border-bottom:0}
+.tagzeile.aktiv{color:var(--cyan)}
+.tagzeile b{font-weight:650}
+.tagzeile .ikon{font-size:19px;text-align:center}
+.spanne{position:relative;height:5px;border-radius:3px;background:rgba(255,255,255,.12)}
+.spanne i{position:absolute;top:0;bottom:0;border-radius:3px;
+  background:linear-gradient(90deg,#6fd3e8,#f2c46a)}
+.tagzeile .werte{text-align:right;font-size:12.5px;white-space:nowrap}
+.tagzeile .werte span{color:var(--faint)}
+.modellzeile{display:flex;justify-content:space-between;align-items:baseline;
+  padding:8px 0;border-bottom:1px solid var(--line-soft);font-size:13px}
+.modellzeile:last-child{border-bottom:0}
+.modellzeile b{font-weight:600}
+.modellzeile em{font-style:normal;color:var(--faint);font-size:11px;display:block}
+#fazit{margin-top:10px;font-size:12.5px;color:var(--dim);line-height:1.5}
+.astro{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.astro div{border:1px solid var(--line-soft);border-radius:11px;padding:9px 10px;
+  background:rgba(255,255,255,.045)}
+.astro small{display:block;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+.astro b{font-size:15px;font-weight:600}
+#mond{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--dim)}
+#mondikon{font-size:30px}
+#luftbalken{height:6px;border-radius:3px;margin:10px 0 6px;
+  background:linear-gradient(90deg,#7fd6a0,#cfe06a,#f2c46a,#f0956a,#e4776b)}
+#luftpunkt{position:relative;top:-9px;width:12px;height:12px;border-radius:50%;
+  background:#fff;border:2px solid rgba(0,0,0,.3);transition:margin-left .5s ease}
+#luftzahl{font-size:26px;font-weight:300}
+#lufttext{font-size:12.5px;color:var(--dim)}
+#favliste{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.fav{position:relative;border:1px solid var(--line-soft);border-radius:11px;
+  padding:9px 10px;text-align:left;background:rgba(255,255,255,.05);font-size:12.5px}
+.fav b{display:block;font-weight:600}
+.fav small{color:var(--faint);font-size:10.5px}
+.fav .weglassen{position:absolute;top:4px;right:4px;width:20px;height:20px;
+  border-radius:50%;background:rgba(196,60,60,.9);font-size:13px;line-height:20px;text-align:center}
+#favzufuegen{width:100%;margin-top:8px;padding:9px;border:1px dashed var(--line);
+  border-radius:11px;font-size:12px;font-weight:600;color:var(--dim)}
 
-  /* 7-Tage-Liste */
-  .tzeile{display:grid;grid-template-columns:96px 44px 1fr auto;gap:10px;align-items:center;
-    padding:14px;border-bottom:1px solid var(--panel-line);cursor:pointer;}
-  .tzeile:last-child{border-bottom:none;}
-  .t-max{font-size:1.3rem;font-weight:500;}
-  .t-min{font-size:1rem;color:var(--txt-dim);font-weight:300;}
+/* ---------- Radar ---------- */
+#radarkarte{padding:14px;margin-bottom:10px}
+#radarkopf{display:flex;justify-content:space-between;align-items:baseline;
+  gap:10px;flex-wrap:wrap;margin-bottom:10px}
+#radar{height:320px;border-radius:12px;overflow:hidden;background:rgba(3,16,25,.5)}
+.leaflet-container{background:#0d2030;font:inherit}
+#radarbedienung{display:flex;align-items:center;gap:12px;margin-top:10px;flex-wrap:wrap}
+#radarzeit{font-size:12.5px;font-weight:600}
+#radarstatus{display:block;font-size:10.5px;color:var(--faint);font-weight:400}
+#radarschieber{flex:1 1 160px;min-width:140px;accent-color:#6fd3e8}
 
-  #meldung{padding:26px;text-align:center;color:var(--txt-dim);font-size:.95rem;line-height:1.6;}
-  .lade{display:inline-block;width:20px;height:20px;border:2px solid var(--txt-faint);border-top-color:var(--txt);
-    border-radius:50%;animation:dreh .8s linear infinite;vertical-align:middle;margin-right:8px;}
-  @keyframes dreh{to{transform:rotate(360deg);}}
-  @media (prefers-reduced-motion: reduce){.lade{animation-duration:1.6s;}}
+/* ---------- Fuss ---------- */
+#fuss{padding:11px 14px;display:flex;justify-content:space-between;gap:10px;
+  flex-wrap:wrap;font-size:10.5px;color:var(--faint)}
+
+/* ---------- Meldungen ---------- */
+#hinweis{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:999;
+  padding:10px 16px;border-radius:12px;font-size:13px;
+  background:rgba(6,26,38,.94);border:1px solid var(--line);box-shadow:var(--schatten)}
+.laden{display:inline-block;width:15px;height:15px;border:2px solid var(--faint);
+  border-top-color:var(--txt);border-radius:50%;animation:dreh .8s linear infinite;
+  vertical-align:-3px;margin-right:7px}
+@keyframes dreh{to{transform:rotate(360deg)}}
+.leer{font-size:12.5px;color:var(--faint);padding:6px 0}
+
+@media (max-width:820px){
+  #kopf{grid-template-columns:1fr auto;row-gap:9px}
+  #suchfeld-wrap{grid-column:1/-1;order:3}
+  #hero{grid-template-columns:1fr;gap:14px}
+  #grad{font-size:64px}
+  #hauptikon{font-size:52px}
+  #ortname{font-size:22px}
+  #radar{height:260px}
+}
 </style>
 </head>
 <body>
-<div id="sky"><div class="stars"></div><div class="cloudblob cb1"></div><div class="cloudblob cb2"></div></div>
 
-<div id="app">
-  <header>
-    <div id="ortName">Wetter-Konsens<small>v9.1 · Direktdaten Open-Meteo</small></div>
-    <button class="iconbtn" id="btnSuche" aria-label="Ort suchen">🔍 Ort</button>
-    <button class="iconbtn" id="btnWebcam" aria-label="Webcams der Umgebung öffnen">📷 Webcam</button>
-    <button class="iconbtn" id="btnAnsicht">7 Tage</button>
-    <button class="iconbtn" id="btnNeu" aria-label="Aktualisieren">↻</button>
-  </header>
-
-  <div id="suchbox">
-    <input id="suchfeld" type="text" placeholder="Ort eingeben, z. B. Schaffhausen …" autocomplete="off">
-    <div id="kandidaten"></div>
-  </div>
-
-  <div id="inhalt">
-    <div class="karte" id="aktuell">
-      <div class="kopf">Aktuell</div>
-      <div id="aktIcon">–</div>
-      <div id="aktTemp">–</div>
-      <div id="aktCond">Lade Daten …</div>
-      <div id="aktDetails"></div>
-      <div id="stand"></div>
-    </div>
-
-    <div>
-      <div id="leiste"></div>
-      <div class="karte" id="liste">
-        <div id="meldung"><span class="lade"></span>Prognose wird geladen …</div>
-      </div>
-    </div>
-  </div>
+<div id="szene" class="tag-klar">
+  <div id="fx"><div class="sterne"></div><div class="wolke w1"></div><div class="wolke w2"></div></div>
 </div>
 
+<main id="app">
+
+  <header id="kopf" class="glas">
+    <div id="marke">
+      <div class="eyebrow">Konsens aus ICON · ECMWF · GFS</div>
+      <h1>Weather <i>AC</i></h1>
+    </div>
+    <div id="suchfeld-wrap">
+      <input id="suchfeld" type="text" autocomplete="off" placeholder="Ort suchen, z. B. Schaffhausen">
+      <div id="vorschlaege" class="weg"></div>
+    </div>
+    <div id="kopfknoepfe">
+      <button class="knopf" id="btnOrtung" title="Aktueller Standort">📍</button>
+      <button class="knopf" id="btnNeu" title="Neu laden">↻</button>
+    </div>
+  </header>
+
+  <section id="hero" class="glas">
+    <div>
+      <div id="ortzeile">
+        <div>
+          <div id="ortname">Schaffhausen</div>
+          <div id="ortzeit">Wetterdaten werden geladen …</div>
+        </div>
+        <button id="stern" title="Zu Favoriten">☆</button>
+      </div>
+      <div id="heromitte">
+        <div>
+          <div id="grad">--°</div>
+          <div id="lage">Lade …</div>
+          <div id="gefuehlt"></div>
+        </div>
+        <div id="hauptikon">⛅</div>
+      </div>
+    </div>
+    <div id="messwerte"></div>
+  </section>
+
+  <section id="nowcast" class="glas">
+    <div class="eyebrow">Niederschlag · nächste 2 Stunden</div>
+    <div id="nowtext">Wird geladen …</div>
+    <div id="nowbalken"></div>
+    <div id="nowskala"><span>jetzt</span><span>+1 Std</span><span>+2 Std</span></div>
+  </section>
+
+  <section id="bandkarte" class="glas">
+    <div id="bandkopf">
+      <div>
+        <div class="eyebrow">Signature</div>
+        <h3 class="titel" style="margin:2px 0 0">Temperaturverlauf mit Modellspanne</h3>
+      </div>
+      <div id="bandhinweis">Die Bandbreite zeigt, wie weit die Modelle auseinanderliegen.</div>
+    </div>
+    <svg id="band" viewBox="0 0 740 230" role="img"
+         aria-label="Temperaturverlauf mit Spannweite der Wettermodelle"></svg>
+    <div id="bandlegende">
+      <span><i class="pkt p-ok"></i> Modelle einig (bis 2°)</span>
+      <span><i class="pkt p-mid"></i> leicht uneinig (bis 4°)</span>
+      <span><i class="pkt p-bad"></i> deutlich uneinig</span>
+    </div>
+  </section>
+
+  <section id="stundenkarte" class="glas">
+    <div id="stundenkopf">
+      <h3 class="titel" id="stundentitel" style="margin:0">Nächste 24 Stunden</h3>
+      <div class="eyebrow">Stunde antippen für den Modellvergleich</div>
+    </div>
+    <div id="tagleiste"></div>
+    <div id="stunden"><div class="leer" style="padding-left:14px"><span class="laden"></span>Vorhersage wird geladen …</div></div>
+  </section>
+
+  <section id="detail" class="glas weg">
+    <div id="detailkopf">
+      <div>
+        <div class="eyebrow">Modellvergleich</div>
+        <div id="detailzeit">--:--</div>
+      </div>
+      <button class="knopf" id="detailZu">Schliessen</button>
+    </div>
+    <table id="detailtabelle"></table>
+    <div id="detailfazit"></div>
+  </section>
+
+  <section id="raster">
+    <article class="kachel glas">
+      <h3 class="titel">7 Tage</h3>
+      <div id="tage"></div>
+    </article>
+
+    <article class="kachel glas">
+      <h3 class="titel">Modelle heute</h3>
+      <div id="modelle"></div>
+      <div id="fazit">Modellvergleich wird geladen …</div>
+    </article>
+
+    <article class="kachel glas">
+      <h3 class="titel">Sonne &amp; Mond</h3>
+      <div class="astro">
+        <div><small>Aufgang</small><b id="aufgang">--:--</b></div>
+        <div><small>Untergang</small><b id="untergang">--:--</b></div>
+      </div>
+      <div id="mond"><span id="mondikon">🌙</span><span id="mondtext">Mondphase wird geladen …</span></div>
+      <div id="tageslaenge" style="font-size:12.5px;color:var(--dim);margin-top:8px"></div>
+    </article>
+
+    <article class="kachel glas">
+      <h3 class="titel">Luftqualität</h3>
+      <div style="display:flex;align-items:baseline;gap:10px">
+        <span id="luftzahl">--</span>
+        <span id="lufttext">wird geladen …</span>
+      </div>
+      <div id="luftbalken"><div id="luftpunkt"></div></div>
+      <div id="luftdetail" style="font-size:11.5px;color:var(--faint)"></div>
+    </article>
+
+    <article class="kachel glas">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <h3 class="titel" style="margin:0">Favoriten</h3>
+        <button class="knopf" id="btnFavBearbeiten" style="padding:5px 9px;font-size:11px">Bearbeiten</button>
+      </div>
+      <div id="favliste"></div>
+      <button id="favzufuegen">＋ Aktuellen Ort merken</button>
+    </article>
+  </section>
+
+  <section id="radarkarte" class="glas">
+    <div id="radarkopf">
+      <div>
+        <div class="eyebrow">Niederschlagsradar</div>
+        <h3 class="titel" style="margin:2px 0 0">Letzte 2 Stunden, in 10-Minuten-Schritten</h3>
+      </div>
+    </div>
+    <div id="radar"></div>
+    <div id="radarbedienung">
+      <button class="knopf" id="radarStart">▶ Abspielen</button>
+      <div><b id="radarzeit">Radar wird geladen …</b><small id="radarstatus">Einen Moment</small></div>
+      <input id="radarschieber" type="range" min="0" max="0" value="0" step="1" aria-label="Radar-Zeitleiste">
+    </div>
+  </section>
+
+  <footer id="fuss" class="glas">
+    <span>Daten: Open-Meteo · ICON (DWD) · ECMWF · GFS (NOAA) · Radar: RainViewer · Karte: OpenStreetMap</span>
+    <span id="stand">v3.0 · noch nicht aktualisiert</span>
+  </footer>
+
+</main>
+
+<div id="hinweis" class="weg"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
 <script>
 "use strict";
 
-/* ---------------- Zustand ---------------- */
-let ort = { name: "Schaffhausen", land: "Schweiz", admin: "Schaffhausen", lat: 47.6964, lon: 8.6350 };
-let daten = null;          // komplette API-Antwort
-let ansicht = "stunden";   // "stunden" | "tage"
-let tagIndex = 0;          // gewählter Tag (0 = heute)
-let abgerufen = null;      // Date des letzten Abrufs
+/* =========================================================
+   Weather AC 3.0
+   Ein Wetterbild aus drei Modellen – inklusive der Frage,
+   wie sicher sich diese drei eigentlich sind.
+   ========================================================= */
 
+const VERSION = "3.0";
+const $ = id => document.getElementById(id);
+
+/* ---------- Modelle ---------- */
 const MODELLE = [
-  { id: "best_match",   name: "Konsens (bester Mix)" },
-  { id: "icon_seamless", name: "ICON (DWD)" },
-  { id: "ecmwf_ifs025", name: "ECMWF" },
-  { id: "gfs_seamless", name: "GFS (NOAA)" }
+  { id:"best_match",    name:"Konsens",      hinweis:"bester Mix je Region" },
+  { id:"icon_seamless", name:"ICON",         hinweis:"Deutscher Wetterdienst" },
+  { id:"ecmwf_ifs025",  name:"ECMWF",        hinweis:"Europäisches Zentrum" },
+  { id:"gfs_seamless",  name:"GFS",          hinweis:"NOAA, USA" }
+];
+const VERGLEICH = MODELLE.filter(m => m.id !== "best_match");
+
+/* ---------- Wettercodes ---------- */
+const WMO = {
+  0:["Klar","☀️","🌙","klar"], 1:["Meist klar","🌤️","🌙","klar"],
+  2:["Teils bewölkt","⛅","☁️","wolke"], 3:["Bedeckt","☁️","☁️","wolke"],
+  45:["Nebel","🌫️","🌫️","wolke"], 48:["Reifnebel","🌫️","🌫️","wolke"],
+  51:["Leichter Niesel","🌦️","🌧️","regen"], 53:["Niesel","🌦️","🌧️","regen"],
+  55:["Starker Niesel","🌧️","🌧️","regen"],
+  56:["Gefrierender Niesel","🌧️","🌧️","regen"], 57:["Gefrierender Niesel","🌧️","🌧️","regen"],
+  61:["Leichter Regen","🌦️","🌧️","regen"], 63:["Regen","🌧️","🌧️","regen"],
+  65:["Starker Regen","🌧️","🌧️","regen"],
+  66:["Gefrierender Regen","🌧️","🌧️","regen"], 67:["Gefrierender Regen","🌧️","🌧️","regen"],
+  71:["Leichter Schneefall","🌨️","🌨️","schnee"], 73:["Schneefall","🌨️","🌨️","schnee"],
+  75:["Starker Schneefall","❄️","❄️","schnee"], 77:["Schneegriesel","🌨️","🌨️","schnee"],
+  80:["Schauer","🌦️","🌧️","regen"], 81:["Kräftige Schauer","🌧️","🌧️","regen"],
+  82:["Heftige Schauer","⛈️","⛈️","regen"],
+  85:["Schneeschauer","🌨️","🌨️","schnee"], 86:["Starke Schneeschauer","❄️","❄️","schnee"],
+  95:["Gewitter","⛈️","⛈️","regen"], 96:["Gewitter mit Hagel","⛈️","⛈️","regen"],
+  99:["Gewitter mit Hagel","⛈️","⛈️","regen"]
+};
+const wmo = code => WMO[code] || ["Unbekannt","🌡️","🌡️","wolke"];
+const wmoText = code => wmo(code)[0];
+const wmoIkon = (code, nacht) => nacht ? wmo(code)[2] : wmo(code)[1];
+
+const WOCHE = ["So","Mo","Di","Mi","Do","Fr","Sa"];
+const WOCHE_LANG = ["Sonntag","Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag"];
+const HIMMEL = ["N","NO","O","SO","S","SW","W","NW"];
+const windRichtung = g => (g == null) ? "–" : HIMMEL[Math.round(((g % 360) + 360) % 360 / 45) % 8];
+
+/* ---------- Speicher (mit Rückfallebene) ---------- */
+const merker = (() => {
+  let verfuegbar = true;
+  try { localStorage.setItem("__t","1"); localStorage.removeItem("__t"); }
+  catch { verfuegbar = false; }
+  const ersatz = {};
+  return {
+    lies(schluessel, standard){
+      try {
+        const roh = verfuegbar ? localStorage.getItem(schluessel) : ersatz[schluessel];
+        return roh ? JSON.parse(roh) : standard;
+      } catch { return standard; }
+    },
+    schreib(schluessel, wert){
+      const roh = JSON.stringify(wert);
+      try { if (verfuegbar) localStorage.setItem(schluessel, roh); else ersatz[schluessel] = roh; }
+      catch { ersatz[schluessel] = roh; }
+    }
+  };
+})();
+
+/* ---------- Zustand ---------- */
+const STANDARDORT = { name:"Schaffhausen", region:"Kanton Schaffhausen", land:"Schweiz", code:"CH", lat:47.6965, lon:8.6330 };
+const STANDARDFAVORITEN = [
+  STANDARDORT,
+  { name:"Zürich", region:"Zürich", land:"Schweiz", code:"CH", lat:47.3769, lon:8.5417 },
+  { name:"Konstanz", region:"Baden-Württemberg", land:"Deutschland", code:"DE", lat:47.6603, lon:9.1758 }
 ];
 
-/* ---------------- WMO-Wettercodes ---------------- */
-const WMO = {
-  0:["Klar","☀️","🌙"], 1:["Meist klar","🌤️","🌙"], 2:["Teils bewölkt","⛅","☁️"], 3:["Bewölkt","☁️","☁️"],
-  45:["Nebel","🌫️","🌫️"], 48:["Reifnebel","🌫️","🌫️"],
-  51:["Leichter Niesel","🌦️","🌧️"], 53:["Niesel","🌦️","🌧️"], 55:["Starker Niesel","🌧️","🌧️"],
-  56:["Gefr. Niesel","🌧️","🌧️"], 57:["Gefr. Niesel","🌧️","🌧️"],
-  61:["Leichter Regen","🌦️","🌧️"], 63:["Regen","🌧️","🌧️"], 65:["Starker Regen","🌧️","🌧️"],
-  66:["Gefr. Regen","🌧️","🌧️"], 67:["Gefr. Regen","🌧️","🌧️"],
-  71:["Leichter Schneefall","🌨️","🌨️"], 73:["Schneefall","🌨️","🌨️"], 75:["Starker Schneefall","❄️","❄️"],
-  77:["Schneegriesel","🌨️","🌨️"],
-  80:["Schauer","🌦️","🌧️"], 81:["Kräftige Schauer","🌧️","🌧️"], 82:["Heftige Schauer","⛈️","⛈️"],
-  85:["Schneeschauer","🌨️","🌨️"], 86:["Starke Schneeschauer","❄️","❄️"],
-  95:["Gewitter","⛈️","⛈️"], 96:["Gewitter mit Hagel","⛈️","⛈️"], 99:["Gewitter mit Hagel","⛈️","⛈️"]
+const zustand = {
+  ort: merker.lies("wac-ort", STANDARDORT),
+  favoriten: merker.lies("wac-favoriten", STANDARDFAVORITEN),
+  favBearbeiten: false,
+  daten: null,
+  luft: null,
+  tagIndex: 0,
+  gewaehlteStunde: null,
+  abgerufen: null
 };
-function wmoText(code){ return (WMO[code]||["Unbekannt","❓","❓"])[0]; }
-function wmoIcon(code, nacht){ const e = WMO[code]||["?","❓","❓"]; return nacht ? e[2] : e[1]; }
 
-function windRichtung(grad){
-  if (grad == null) return "–";
-  const r = ["N","NO","O","SO","S","SW","W","NW"];
-  return r[Math.round(grad / 45) % 8];
+/* ---------- kleine Helfer ---------- */
+function hinweis(text, dauer = 2600){
+  const el = $("hinweis");
+  el.textContent = text;
+  el.classList.remove("weg");
+  clearTimeout(hinweis._t);
+  hinweis._t = setTimeout(() => el.classList.add("weg"), dauer);
 }
+async function holen(url){
+  const antwort = await fetch(url);
+  if (!antwort.ok) throw new Error("HTTP " + antwort.status);
+  return antwort.json();
+}
+function fahne(code){
+  if (!code || code.length !== 2) return "🌍";
+  return String.fromCodePoint(...[...code.toUpperCase()].map(z => 127397 + z.charCodeAt(0)));
+}
+const uhr = iso => String(iso || "").slice(11,16) || "--:--";
+const runde = w => (w === null || w === undefined || Number.isNaN(w)) ? null : Math.round(w);
 
-/* ---------------- Hilfen für Multi-Modell-Antwort ---------------- */
-// Bei mehreren Modellen heissen die Felder z. B. temperature_2m_best_match.
-function serie(block, variable, modell){
+/* Serien aus der Mehrmodell-Antwort:
+   Open-Meteo hängt bei mehreren Modellen den Modellnamen an das Feld an. */
+function serie(block, feld, modell){
   if (!block) return null;
-  if (block[variable + "_" + modell] !== undefined) return block[variable + "_" + modell];
-  if (modell === "best_match" && block[variable] !== undefined) return block[variable];
+  if (block[feld + "_" + modell] !== undefined) return block[feld + "_" + modell];
+  if (modell === "best_match" && block[feld] !== undefined) return block[feld];
   return null;
 }
-function wert(block, variable, modell, i){
-  const s = serie(block, variable, modell);
+function wert(block, feld, modell, i){
+  const s = serie(block, feld, modell);
   if (s == null) return null;
   const v = Array.isArray(s) ? s[i] : s;
   return (v === null || v === undefined || Number.isNaN(v)) ? null : v;
 }
-// best_match bevorzugt, sonst erstes Modell mit Daten
-function anzeigeWert(block, variable, i){
+/* bevorzugt den Konsens, sonst das erste Modell mit Daten */
+function anzeige(block, feld, i){
   for (const m of MODELLE){
-    const v = wert(block, variable, m.id, i);
+    const v = wert(block, feld, m.id, i);
     if (v !== null) return v;
   }
   return null;
 }
 
-/* Einigkeit der Modelle für eine Stunde: Temperatur-Spannweite + Niederschlag */
-function einigkeit(i){
-  const temps = [], precs = [];
-  for (const m of MODELLE){
-    if (m.id === "best_match") continue;
-    const t = wert(daten.hourly, "temperature_2m", m.id, i);
-    const p = wert(daten.hourly, "precipitation", m.id, i);
+/* Spannweite der Modelle für eine Stunde */
+function spanne(i){
+  const temps = [];
+  let regenJa = 0, regenNein = 0;
+  for (const m of VERGLEICH){
+    const t = wert(zustand.daten.hourly, "temperature_2m", m.id, i);
+    const p = wert(zustand.daten.hourly, "precipitation", m.id, i);
     if (t !== null) temps.push(t);
-    if (p !== null) precs.push(p);
+    if (p !== null){ if (p >= 0.2) regenJa++; else regenNein++; }
   }
   if (temps.length < 2) return null;
-  const tSpann = Math.max(...temps) - Math.min(...temps);
-  const pMax = precs.length ? Math.max(...precs) : 0;
-  const pMin = precs.length ? Math.min(...precs) : 0;
-  const pStreit = (pMax >= 0.3 && pMin < 0.1);
-  if (tSpann <= 2 && !pStreit) return "ok";
-  if (tSpann <= 4 && !(pStreit && tSpann > 3)) return "mid";
-  return "bad";
+  const min = Math.min(...temps), max = Math.max(...temps);
+  const streit = regenJa > 0 && regenNein > 0;
+  const breite = max - min;
+  let stufe = "ok";
+  if (breite > 4 || (streit && breite > 2.5)) stufe = "bad";
+  else if (breite > 2 || streit) stufe = "mid";
+  return { min, max, breite, stufe, streit, anzahl: temps.length };
 }
 
-/* ---------------- Datenabruf ---------------- */
-async function ladeWetter(){
-  zeigeMeldung('<span class="lade"></span>Prognose wird geladen …');
-  const basis = "https://api.open-meteo.com/v1/forecast" +
-    "?latitude=" + ort.lat + "&longitude=" + ort.lon +
+/* ---------- Daten laden ---------- */
+async function ladeAlles(){
+  const o = zustand.ort;
+  $("stundenkopf").querySelector(".eyebrow").textContent = "Stunde antippen für den Modellvergleich";
+  $("stunden").innerHTML = '<div class="leer" style="padding-left:14px"><span class="laden"></span>Vorhersage wird geladen …</div>';
+
+  const basis =
+    "https://api.open-meteo.com/v1/forecast?latitude=" + o.lat + "&longitude=" + o.lon +
     "&timezone=auto&forecast_days=7" +
-    "&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation,pressure_msl" +
-    "&hourly=temperature_2m,apparent_temperature,precipitation_probability,precipitation,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m" +
-    "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,wind_speed_10m_max,sunrise,sunset";
+    "&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code," +
+      "wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation,pressure_msl,cloud_cover,is_day" +
+    "&hourly=temperature_2m,apparent_temperature,precipitation_probability,precipitation," +
+      "weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,uv_index,visibility" +
+    "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max," +
+      "precipitation_sum,wind_speed_10m_max,uv_index_max,sunrise,sunset";
+
   try {
-    let antwort = await fetch(basis + "&models=" + MODELLE.map(m => m.id).join(","));
-    if (!antwort.ok){
-      // Rückfall: nur best_match (ein zweiter Versuch nur im Fehlerfall)
-      antwort = await fetch(basis);
+    let antwort;
+    try {
+      antwort = await holen(basis + "&minutely_15=precipitation&models=" + MODELLE.map(m => m.id).join(","));
+    } catch {
+      // Rückfall: ohne Modellvergleich, damit die App auf jeden Fall etwas zeigt
+      antwort = await holen(basis + "&minutely_15=precipitation");
     }
-    if (!antwort.ok) throw new Error("HTTP " + antwort.status);
-    daten = await antwort.json();
-    abgerufen = new Date();
-    tagIndex = 0;
+    zustand.daten = antwort;
+    zustand.abgerufen = new Date();
+    zustand.tagIndex = 0;
+    zustand.gewaehlteStunde = null;
+    merker.schreib("wac-ort", zustand.ort);
     zeichneAlles();
+    ladeLuft();
+    ladeRadar();
   } catch (e) {
-    zeigeMeldung("Daten konnten nicht geladen werden.<br>Prüfe die Internetverbindung und tippe auf ↻.<br><small>" + e.message + "</small>");
+    $("stunden").innerHTML = '<div class="leer" style="padding-left:14px">Keine Verbindung zu Open-Meteo. Prüfe das Netz und tippe auf ↻.</div>';
+    hinweis("Wetterdaten konnten nicht geladen werden", 4000);
   }
 }
 
-/* ---------------- Ortssuche ---------------- */
-let suchTimer = null;
-async function sucheOrte(text){
-  const box = document.getElementById("kandidaten");
-  if (text.trim().length < 2){ box.innerHTML = ""; return; }
+async function ladeLuft(){
+  const o = zustand.ort;
   try {
-    const r = await fetch("https://geocoding-api.open-meteo.com/v1/search?name=" +
-      encodeURIComponent(text.trim()) + "&count=5&language=de&format=json");
-    const j = await r.json();
-    const liste = (j.results || []).slice(0, 5);
-    box.innerHTML = "";
-    if (!liste.length){
-      box.innerHTML = '<div class="kandidat">Kein Ort gefunden.</div>';
+    zustand.luft = await holen(
+      "https://air-quality-api.open-meteo.com/v1/air-quality?latitude=" + o.lat +
+      "&longitude=" + o.lon + "&timezone=auto&current=european_aqi,pm2_5,pm10");
+  } catch { zustand.luft = null; }
+  zeichneLuft();
+}
+
+/* ---------- Ortssuche ---------- */
+let suchZeit = null;
+$("suchfeld").addEventListener("input", e => {
+  clearTimeout(suchZeit);
+  const text = e.target.value.trim();
+  if (text.length < 2){ $("vorschlaege").classList.add("weg"); return; }
+  suchZeit = setTimeout(() => sucheOrte(text), 320);
+});
+$("suchfeld").addEventListener("keydown", e => {
+  if (e.key === "Escape") $("vorschlaege").classList.add("weg");
+});
+document.addEventListener("click", e => {
+  if (!$("suchfeld-wrap").contains(e.target)) $("vorschlaege").classList.add("weg");
+});
+
+async function sucheOrte(text){
+  const box = $("vorschlaege");
+  try {
+    const j = await holen("https://geocoding-api.open-meteo.com/v1/search?name=" +
+      encodeURIComponent(text) + "&count=7&language=de&format=json");
+    const treffer = j.results || [];
+    box.classList.remove("weg");
+    if (!treffer.length){
+      box.innerHTML = '<div class="vorschlag">Kein Ort mit diesem Namen gefunden.</div>';
       return;
     }
-    for (const k of liste){
+    box.innerHTML = "";
+    treffer.forEach(t => {
       const b = document.createElement("button");
-      b.className = "kandidat";
-      b.innerHTML = "<strong>" + k.name + "</strong><small>" +
-        [k.admin1, k.country].filter(Boolean).join(", ") + "</small>";
+      b.className = "vorschlag";
+      b.innerHTML = "<strong>" + fahne(t.country_code) + " " + t.name + "</strong><small>" +
+        [t.admin1, t.country].filter(Boolean).join(" · ") + "</small>";
       b.onclick = () => {
-        ort = { name: k.name, land: k.country || "", admin: k.admin1 || "", lat: k.latitude, lon: k.longitude };
-        document.getElementById("suchbox").classList.remove("offen");
-        document.getElementById("suchfeld").value = "";
-        box.innerHTML = "";
-        ladeWetter();
+        zustand.ort = {
+          name:t.name, region:t.admin1 || "", land:t.country || "",
+          code:t.country_code || "", lat:t.latitude, lon:t.longitude
+        };
+        $("suchfeld").value = "";
+        box.classList.add("weg");
+        ladeAlles();
       };
       box.appendChild(b);
-    }
-  } catch (e) {
-    box.innerHTML = '<div class="kandidat">Suche fehlgeschlagen – erneut versuchen.</div>';
+    });
+  } catch {
+    box.classList.remove("weg");
+    box.innerHTML = '<div class="vorschlag">Suche gerade nicht erreichbar. Nochmal versuchen.</div>';
   }
 }
 
-/* ---------------- Darstellung ---------------- */
-function zeigeMeldung(html){
-  document.getElementById("liste").innerHTML = '<div id="meldung">' + html + "</div>";
-}
+$("btnOrtung").onclick = () => {
+  if (!navigator.geolocation){ hinweis("Dieses Gerät gibt den Standort nicht frei"); return; }
+  hinweis("Standort wird bestimmt …");
+  navigator.geolocation.getCurrentPosition(p => {
+    zustand.ort = {
+      name:"Aktueller Standort", region:"", land:"", code:"",
+      lat:p.coords.latitude, lon:p.coords.longitude
+    };
+    ladeAlles();
+  }, () => hinweis("Standort nicht verfügbar – bitte Ort suchen", 3600), { timeout:8000 });
+};
 
-function istNacht(isoZeit){
-  if (!daten || !daten.daily) return false;
-  const d = isoZeit.slice(0, 10);
-  const di = daten.daily.time.indexOf(d);
-  if (di < 0) return false;
-  const auf = serie(daten.daily, "sunrise", "best_match");
-  const unter = serie(daten.daily, "sunset", "best_match");
+$("btnNeu").onclick = () => { hinweis("Wird aktualisiert …"); ladeAlles(); };
+
+/* ---------- Zeichnen: Kopf und Hero ---------- */
+function istNacht(iso){
+  const d = zustand.daten;
+  if (!d || !d.daily) return false;
+  const i = d.daily.time.indexOf(String(iso).slice(0,10));
+  if (i < 0) return false;
+  const auf = serie(d.daily, "sunrise", "best_match");
+  const unter = serie(d.daily, "sunset", "best_match");
   if (!auf || !unter) return false;
-  return isoZeit < auf[di] || isoZeit >= unter[di];
+  return iso < auf[i] || iso >= unter[i];
 }
 
-function setzeHintergrund(){
-  const c = daten.current || {};
-  const code = anzeigeWert(c, "weather_code", 0);
-  const jetztIso = c.time || "";
-  const nacht = istNacht(jetztIso);
-  // Dämmerung: ± 40 Min. um Auf-/Untergang
+function setzeSzene(){
+  const c = zustand.daten.current;
+  const code = anzeige(c, "weather_code", 0);
+  const jetzt = c.time || "";
+  const nacht = istNacht(jetzt);
+  const art = wmo(code)[3];
+  let klasse;
+  const d = zustand.daten.daily;
+  const i = d.time.indexOf(jetzt.slice(0,10));
   let daemmerung = false;
-  const di = daten.daily.time.indexOf(jetztIso.slice(0, 10));
-  if (di >= 0){
-    const auf = serie(daten.daily, "sunrise", "best_match")[di];
-    const unter = serie(daten.daily, "sunset", "best_match")[di];
-    const t = new Date(jetztIso).getTime();
-    daemmerung = Math.abs(t - new Date(auf).getTime()) < 40*60000 ||
-                 Math.abs(t - new Date(unter).getTime()) < 40*60000;
+  if (i >= 0){
+    const auf = serie(d,"sunrise","best_match"), unter = serie(d,"sunset","best_match");
+    if (auf && unter){
+      const t = new Date(jetzt).getTime();
+      daemmerung = Math.abs(t - new Date(auf[i]).getTime()) < 40*60000 ||
+                   Math.abs(t - new Date(unter[i]).getTime()) < 40*60000;
+    }
   }
-  let art = "clear";
-  if (code >= 45) art = "rain";
-  else if (code === 3) art = "cloud";
-  else if (code === 2) art = "cloud";
-  document.body.className = daemmerung ? "bg-dawn" :
-    "bg-" + (nacht ? "night" : "day") + "-" + art;
+  if (daemmerung) klasse = "daemmerung";
+  else klasse = (nacht ? "nacht-" : "tag-") + (art === "schnee" ? "regen" : (art === "klar" ? "klar" : (art === "wolke" ? "wolke" : "regen")));
+  $("szene").className = klasse;
+  wetterEffekt(art, nacht);
 }
 
-function zeichneAktuell(){
-  const c = daten.current;
-  const code = anzeigeWert(c, "weather_code", 0);
+function wetterEffekt(art, nacht){
+  const fx = $("fx");
+  fx.querySelectorAll(".tropfen,.flocke").forEach(e => e.remove());
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  if (art === "regen"){
+    for (let i = 0; i < 26; i++){
+      const t = document.createElement("div");
+      t.className = "tropfen";
+      t.style.left = Math.random()*100 + "%";
+      t.style.animationDuration = (0.6 + Math.random()*0.5) + "s";
+      t.style.animationDelay = (-Math.random()*2) + "s";
+      t.style.opacity = 0.3 + Math.random()*0.4;
+      fx.appendChild(t);
+    }
+  } else if (art === "schnee"){
+    for (let i = 0; i < 18; i++){
+      const f = document.createElement("div");
+      f.className = "flocke";
+      f.textContent = "❄";
+      f.style.left = Math.random()*100 + "%";
+      f.style.animationDuration = (7 + Math.random()*7) + "s";
+      f.style.animationDelay = (-Math.random()*10) + "s";
+      fx.appendChild(f);
+    }
+  }
+}
+
+function zeichneHero(){
+  const d = zustand.daten, c = d.current, o = zustand.ort;
+  const code = anzeige(c, "weather_code", 0);
   const nacht = istNacht(c.time);
-  document.getElementById("aktIcon").textContent = wmoIcon(code, nacht);
-  document.getElementById("aktTemp").textContent = Math.round(anzeigeWert(c, "temperature_2m", 0)) + "°";
-  document.getElementById("aktCond").textContent = wmoText(code);
 
-  const z = [];
-  const gef = anzeigeWert(c, "apparent_temperature", 0);
-  const wg = anzeigeWert(c, "wind_speed_10m", 0);
-  const wb = anzeigeWert(c, "wind_gusts_10m", 0);
-  const wr = anzeigeWert(c, "wind_direction_10m", 0);
-  const rf = anzeigeWert(c, "relative_humidity_2m", 0);
-  const dr = anzeigeWert(c, "pressure_msl", 0);
-  if (gef !== null) z.push(["Gefühlt", Math.round(gef) + "°"]);
-  if (wg !== null) z.push(["Wind", windRichtung(wr) + " " + Math.round(wg) + " km/h"]);
-  if (wb !== null) z.push(["Böen", Math.round(wb) + " km/h"]);
-  if (rf !== null) z.push(["Luftfeuchte", Math.round(rf) + " %"]);
-  if (dr !== null) z.push(["Druck", Math.round(dr) + " hPa"]);
-  const di = 0;
-  const auf = serie(daten.daily, "sunrise", "best_match");
-  const unter = serie(daten.daily, "sunset", "best_match");
-  if (auf && unter){
-    z.push(["Sonnenaufgang", auf[di].slice(11, 16)]);
-    z.push(["Sonnenuntergang", unter[di].slice(11, 16)]);
-  }
-  document.getElementById("aktDetails").innerHTML =
-    z.map(p => '<div class="aktzeile"><span>' + p[0] + "</span><span>" + p[1] + "</span></div>").join("");
+  $("ortname").innerHTML = fahne(o.code) + " " + o.name;
+  $("ortzeit").textContent = new Date(c.time).toLocaleString("de-CH",
+    { weekday:"long", day:"2-digit", month:"long", hour:"2-digit", minute:"2-digit" }) + " Uhr" +
+    ([o.region, o.land].filter(Boolean).length ? " · " + [o.region, o.land].filter(Boolean).join(", ") : "");
 
-  document.getElementById("stand").innerHTML =
-    "Abgerufen " + abgerufen.toLocaleTimeString("de-CH", {hour:"2-digit", minute:"2-digit"}) + " Uhr<br>" +
-    "Datenbasis: aktuellster Modelllauf via Open-Meteo (ICON, ECMWF, GFS)<br>" +
-    "● <span style='color:var(--ok)'>hohe</span> · <span style='color:var(--mid)'>mittlere</span> · <span style='color:var(--bad)'>geringe</span> Modell-Einigkeit";
+  $("grad").textContent = (runde(anzeige(c,"temperature_2m",0)) ?? "--") + "°";
+  $("lage").textContent = wmoText(code);
+  $("hauptikon").textContent = wmoIkon(code, nacht);
+
+  const gef = runde(anzeige(c,"apparent_temperature",0));
+  $("gefuehlt").textContent = gef !== null ? "gefühlt " + gef + "°" : "";
+
+  const uvHeute = anzeige(d.daily, "uv_index_max", 0);
+  const sicht = anzeige(d.hourly, "visibility", jetztIndex());
+  const werte = [
+    ["Wind", windRichtung(anzeige(c,"wind_direction_10m",0)) + " " + (runde(anzeige(c,"wind_speed_10m",0)) ?? "--") + " km/h"],
+    ["Böen", (runde(anzeige(c,"wind_gusts_10m",0)) ?? "--") + " km/h"],
+    ["Luftfeuchte", (runde(anzeige(c,"relative_humidity_2m",0)) ?? "--") + " %"],
+    ["Luftdruck", (runde(anzeige(c,"pressure_msl",0)) ?? "--") + " hPa"],
+    ["Bewölkung", (runde(anzeige(c,"cloud_cover",0)) ?? "--") + " %"],
+    ["UV heute", uvHeute !== null ? uvHeute.toFixed(1) : "--"],
+    ["Sichtweite", sicht !== null ? Math.round(sicht/1000) + " km" : "--"],
+    ["Niederschlag", (anzeige(c,"precipitation",0) ?? 0).toFixed(1) + " mm"]
+  ];
+  $("messwerte").innerHTML = werte.map(w =>
+    '<div class="mw"><label>' + w[0] + "</label><strong>" + w[1] + "</strong></div>").join("");
+
+  const schonFavorit = zustand.favoriten.some(f => nahe(f, o));
+  $("stern").textContent = schonFavorit ? "★" : "☆";
+  $("stern").style.color = schonFavorit ? "#f2c46a" : "";
 }
 
-function zeichneLeiste(){
-  const leiste = document.getElementById("leiste");
+const nahe = (a,b) => Math.abs(a.lat-b.lat) < 0.05 && Math.abs(a.lon-b.lon) < 0.05;
+
+function jetztIndex(){
+  const d = zustand.daten;
+  const jetzt = (d.current.time || "").slice(0,13);
+  const i = d.hourly.time.findIndex(t => t.slice(0,13) === jetzt);
+  return i < 0 ? 0 : i;
+}
+
+/* ---------- Nowcast ---------- */
+function zeichneNowcast(){
+  const m = zustand.daten.minutely_15;
+  const reihe = m ? (m.precipitation_best_match || m.precipitation) : null;
+  const box = $("nowbalken");
+  if (!m || !reihe){
+    $("nowtext").textContent = "Für diesen Ort gibt es keine 15-Minuten-Daten.";
+    box.innerHTML = ""; return;
+  }
+  const jetzt = zustand.daten.current.time;
+  let start = m.time.findIndex(t => t >= jetzt);
+  if (start < 0) start = 0;
+  const fenster = [];
+  for (let i = start; i < Math.min(start + 8, m.time.length); i++){
+    fenster.push({ zeit:m.time[i], mm: reihe[i] ?? 0 });
+  }
+  const max = Math.max(0.5, ...fenster.map(f => f.mm));
+  box.innerHTML = fenster.map(f => {
+    const h = Math.max(4, Math.round((f.mm / max) * 36));
+    return '<div class="nowblock" title="' + uhr(f.zeit) + " · " + f.mm.toFixed(1) + ' mm" style="height:' + h + 'px">' +
+      (f.mm > 0.02 ? "<i></i>" : "") + "</div>";
+  }).join("");
+
+  const summe = fenster.reduce((s,f) => s + f.mm, 0);
+  const ersterRegen = fenster.find(f => f.mm >= 0.1);
+  if (summe < 0.05){
+    $("nowtext").textContent = "Trocken in den nächsten zwei Stunden.";
+  } else if (ersterRegen && ersterRegen.zeit === fenster[0].zeit){
+    $("nowtext").textContent = "Es fällt gerade Niederschlag – zusammen etwa " + summe.toFixed(1) + " mm bis " + uhr(fenster[fenster.length-1].zeit) + " Uhr.";
+  } else if (ersterRegen){
+    $("nowtext").textContent = "Niederschlag ab etwa " + uhr(ersterRegen.zeit) + " Uhr, insgesamt rund " + summe.toFixed(1) + " mm.";
+  } else {
+    $("nowtext").textContent = "Nur vereinzelte Tropfen, zusammen unter " + Math.max(0.1, summe).toFixed(1) + " mm.";
+  }
+}
+
+/* ---------- Signature: Konsensband ---------- */
+function zeichneBand(){
+  const svg = $("band");
+  const d = zustand.daten, h = d.hourly;
+  const idx = stundenAuswahl();
+  const n = idx.length;
+  if (n < 2){ svg.innerHTML = ""; return; }
+
+  const B = 740, H = 230, lo = 38, ro = 12, ob = 18, un = 46;
+  const breite = B - lo - ro, hoehe = H - ob - un;
+
+  const temps = idx.map(i => anzeige(h,"temperature_2m",i)).filter(v => v !== null);
+  if (!temps.length){ svg.innerHTML = ""; return; }
+  const spannen = idx.map(i => spanne(i));
+  const alleMin = Math.min(...temps, ...spannen.filter(Boolean).map(s => s.min));
+  const alleMax = Math.max(...temps, ...spannen.filter(Boolean).map(s => s.max));
+  const puffer = Math.max(1.5, (alleMax - alleMin) * 0.15);
+  const tMin = alleMin - puffer, tMax = alleMax + puffer;
+
+  const x = k => lo + (n === 1 ? breite/2 : (k * breite) / (n - 1));
+  const y = t => ob + hoehe - ((t - tMin) / (tMax - tMin)) * hoehe;
+
+  const farbe = { ok:"#7fd6a0", mid:"#f2c46a", bad:"#e4776b" };
+  let teile = [];
+
+  // Gitternetz
+  const schritte = 4;
+  for (let g = 0; g <= schritte; g++){
+    const t = tMin + (tMax - tMin) * g / schritte;
+    const yy = y(t);
+    teile.push('<line x1="' + lo + '" y1="' + yy.toFixed(1) + '" x2="' + (B-ro) + '" y2="' + yy.toFixed(1) +
+      '" stroke="rgba(255,255,255,.08)" stroke-width="1"/>');
+    teile.push('<text x="' + (lo-7) + '" y="' + (yy+3.5).toFixed(1) + '" text-anchor="end" fill="rgba(240,245,250,.46)" font-size="10">' +
+      Math.round(t) + "°</text>");
+  }
+
+  // Niederschlagswahrscheinlichkeit als Säulen im Fussbereich
+  idx.forEach((i,k) => {
+    const p = anzeige(h,"precipitation_probability",i);
+    if (p === null || p < 3) return;
+    const bh = (p/100) * 30;
+    const bw = Math.max(3, breite / n * 0.5);
+    teile.push('<rect x="' + (x(k)-bw/2).toFixed(1) + '" y="' + (ob+hoehe-bh).toFixed(1) +
+      '" width="' + bw.toFixed(1) + '" height="' + bh.toFixed(1) +
+      '" fill="rgba(111,211,232,.22)" rx="1.5"/>');
+  });
+
+  // Das Band: je Stunde ein Segment, eingefärbt nach Einigkeit
+  for (let k = 0; k < n - 1; k++){
+    const a = spannen[k], b = spannen[k+1];
+    if (!a || !b) continue;
+    const stufe = (a.stufe === "bad" || b.stufe === "bad") ? "bad" :
+                  (a.stufe === "mid" || b.stufe === "mid") ? "mid" : "ok";
+    const punkte = [
+      x(k) + "," + y(a.max).toFixed(1),
+      x(k+1) + "," + y(b.max).toFixed(1),
+      x(k+1) + "," + y(b.min).toFixed(1),
+      x(k) + "," + y(a.min).toFixed(1)
+    ].join(" ");
+    teile.push('<polygon points="' + punkte + '" fill="' + farbe[stufe] + '" opacity="' +
+      (stufe === "ok" ? .2 : stufe === "mid" ? .26 : .32) + '"/>');
+  }
+
+  // Konsenslinie
+  const linie = idx.map((i,k) => {
+    const t = anzeige(h,"temperature_2m",i);
+    return t === null ? null : x(k).toFixed(1) + "," + y(t).toFixed(1);
+  }).filter(Boolean).join(" ");
+  teile.push('<polyline points="' + linie + '" fill="none" stroke="#eaf6fb" stroke-width="2.2" ' +
+    'stroke-linejoin="round" stroke-linecap="round"/>');
+
+  // Stundenbeschriftung alle 3 Stunden
+  idx.forEach((i,k) => {
+    if (k % 3 !== 0) return;
+    teile.push('<text x="' + x(k).toFixed(1) + '" y="' + (H-26) + '" text-anchor="middle" ' +
+      'fill="rgba(240,245,250,.46)" font-size="10">' + uhr(h.time[i]) + "</text>");
+  });
+
+  // Jetzt-Markierung
+  if (zustand.tagIndex === 0){
+    teile.push('<line x1="' + lo + '" y1="' + ob + '" x2="' + lo + '" y2="' + (ob+hoehe) +
+      '" stroke="#6fd3e8" stroke-width="1.5" stroke-dasharray="3 3"/>');
+    teile.push('<text x="' + (lo+4) + '" y="' + (ob+11) + '" fill="#6fd3e8" font-size="10" font-weight="700">JETZT</text>');
+  }
+
+  svg.innerHTML = teile.join("");
+
+  // Hinweistext unter dem Kopf
+  const gueltig = spannen.filter(Boolean);
+  if (!gueltig.length){
+    $("bandhinweis").textContent = "Für diesen Ort liefert nur ein Modell Daten – ohne Spanne.";
+  } else {
+    const groesste = gueltig.reduce((a,b) => b.breite > a.breite ? b : a);
+    const schnitt = gueltig.reduce((s,v) => s + v.breite, 0) / gueltig.length;
+    $("bandhinweis").textContent = "Modelle im Schnitt " + schnitt.toFixed(1) +
+      "° auseinander, maximal " + groesste.breite.toFixed(1) + "°.";
+  }
+}
+
+/* ---------- Tagesleiste und Stunden ---------- */
+function zeichneTagleiste(){
+  const d = zustand.daten.daily;
+  const leiste = $("tagleiste");
   leiste.innerHTML = "";
-  if (ansicht === "tage") return;
-  const namen = ["So","Mo","Di","Mi","Do","Fr","Sa"];
-  daten.daily.time.forEach((d, i) => {
-    const dt = new Date(d + "T12:00");
+  d.time.forEach((t,i) => {
+    const dt = new Date(t + "T12:00");
     const b = document.createElement("button");
-    b.className = "tag-chip" + (i === tagIndex ? " aktiv" : "");
-    b.innerHTML = (i === 0 ? "Heute" : namen[dt.getDay()]) +
-      "<small>" + dt.getDate() + "." + (dt.getMonth() + 1) + ".</small>";
-    b.onclick = () => { tagIndex = i; zeichneListe(); zeichneLeiste(); };
+    b.className = "tagchip" + (i === zustand.tagIndex ? " aktiv" : "");
+    b.innerHTML = (i === 0 ? "Heute" : WOCHE[dt.getDay()]) +
+      "<small>" + dt.getDate() + "." + (dt.getMonth()+1) + ".</small>";
+    b.onclick = () => {
+      zustand.tagIndex = i;
+      zustand.gewaehlteStunde = null;
+      $("detail").classList.add("weg");
+      zeichneTagleiste(); zeichneStunden(); zeichneBand(); zeichneTage();
+    };
     leiste.appendChild(b);
   });
 }
 
+/* Welche Stunden gehören zur aktuellen Auswahl?
+   Heute: die nächsten 24 Stunden ab jetzt. Sonst: der ganze Tag. */
+function stundenAuswahl(){
+  const d = zustand.daten, h = d.hourly;
+  if (zustand.tagIndex === 0){
+    const start = jetztIndex();
+    const idx = [];
+    for (let i = start; i < Math.min(start + 24, h.time.length); i++) idx.push(i);
+    return idx;
+  }
+  const tag = d.daily.time[zustand.tagIndex];
+  const idx = [];
+  h.time.forEach((t,i) => { if (t.slice(0,10) === tag) idx.push(i); });
+  return idx;
+}
+
 function zeichneStunden(){
-  const h = daten.hourly;
-  const tag = daten.daily.time[tagIndex];
-  const el = document.getElementById("liste");
-  el.innerHTML = "";
-  const jetztStunde = (daten.current.time || "").slice(0, 13);
+  const d = zustand.daten, h = d.hourly;
+  const box = $("stunden");
+  box.innerHTML = "";
+  const jetzt = (d.current.time || "").slice(0,13);
   let scrollZiel = null;
 
-  h.time.forEach((t, i) => {
-    if (t.slice(0, 10) !== tag) return;
+  $("stundentitel").textContent = zustand.tagIndex === 0
+    ? "Nächste 24 Stunden"
+    : new Date(d.daily.time[zustand.tagIndex] + "T12:00")
+        .toLocaleDateString("de-CH", { weekday:"long", day:"2-digit", month:"long" });
+
+  stundenAuswahl().forEach(i => {
+    const t = h.time[i];
     const nacht = istNacht(t);
-    const code = anzeigeWert(h, "weather_code", i);
-    const temp = anzeigeWert(h, "temperature_2m", i);
-    const prob = anzeigeWert(h, "precipitation_probability", i);
-    const mm = anzeigeWert(h, "precipitation", i);
-    const ws = anzeigeWert(h, "wind_speed_10m", i);
-    const wr = anzeigeWert(h, "wind_direction_10m", i);
-    const e = einigkeit(i);
+    const code = anzeige(h,"weather_code",i);
+    const temp = runde(anzeige(h,"temperature_2m",i));
+    const prob = runde(anzeige(h,"precipitation_probability",i));
+    const wind = runde(anzeige(h,"wind_speed_10m",i));
+    const s = spanne(i);
+    const istJetzt = t.slice(0,13) === jetzt;
 
-    const z = document.createElement("div");
-    z.className = "zeile" + (t.slice(0, 13) === jetztStunde ? " jetzt" : "");
-    z.setAttribute("role", "button");
-    z.tabIndex = 0;
-
-    let meta = [];
-    if (prob !== null) meta.push("☂️ " + Math.round(prob) + " %");
-    if (mm !== null && mm >= 0.1) meta.push(mm.toFixed(1) + " mm");
-    if (ws !== null) meta.push("🧭 " + windRichtung(wr) + " " + Math.round(ws) + " km/h");
-    if (e) meta.push('<span class="punkt p-' + e + '" title="Modell-Einigkeit"></span>');
-
-    z.innerHTML =
-      '<div class="z-zeit">' + t.slice(11, 16) + "</div>" +
-      '<div class="z-icon">' + wmoIcon(code, nacht) + "</div>" +
-      '<div><div class="z-cond">' + wmoText(code) + '</div><div class="z-meta">' + meta.join(" · ") + "</div></div>" +
-      '<div class="z-temp">' + (temp !== null ? Math.round(temp) + "°" : "–") + "</div>" +
-      '<div class="modelle">' + modellTabelle(i) + "</div>";
-    z.onclick = () => z.classList.toggle("offen");
-    z.onkeydown = ev => { if (ev.key === "Enter" || ev.key === " "){ ev.preventDefault(); z.classList.toggle("offen"); } };
-    el.appendChild(z);
-    if (t.slice(0, 13) === jetztStunde) scrollZiel = z;
+    const el = document.createElement("button");
+    el.className = "stunde" + (istJetzt ? " jetzt" : "") + (zustand.gewaehlteStunde === i ? " gewaehlt" : "");
+    el.innerHTML =
+      "<time>" + (istJetzt ? "Jetzt" : uhr(t)) + "</time>" +
+      '<div class="ikon">' + wmoIkon(code, nacht) + "</div>" +
+      '<div class="temp">' + (temp ?? "--") + "°</div>" +
+      '<div class="zusatz">' + (prob ?? 0) + " %<br>" + (wind ?? "--") + " km/h</div>" +
+      (s ? '<i class="pkt p-' + s.stufe + '" title="Modellspanne ' + s.breite.toFixed(1) + '°"></i>' : "");
+    el.onclick = () => zeigeDetail(i);
+    box.appendChild(el);
+    if (istJetzt) scrollZiel = el;
   });
 
-  if (scrollZiel && tagIndex === 0){
-    requestAnimationFrame(() => scrollZiel.scrollIntoView({block:"center", behavior:"auto"}));
+
+  if (!box.children.length){
+    box.innerHTML = '<div class="leer" style="padding-left:14px">Für diesen Tag liegen keine Stundenwerte vor.</div>';
+  }
+  if (scrollZiel){
+    requestAnimationFrame(() => {
+      box.scrollLeft = Math.max(0, scrollZiel.offsetLeft - box.offsetLeft - 14);
+    });
   }
 }
 
-function modellTabelle(i){
-  let zeilen = "";
+function zeigeDetail(i){
+  const h = zustand.daten.hourly;
+  zustand.gewaehlteStunde = i;
+  zeichneStunden();
+
+  const dt = new Date(h.time[i]);
+  $("detailzeit").textContent = WOCHE_LANG[dt.getDay()] + ", " + uhr(h.time[i]) + " Uhr";
+
+  let zeilen = "<tr><th>Modell</th><th>Temperatur</th><th>Niederschlag</th><th>Wind</th></tr>";
   for (const m of MODELLE){
-    const t = wert(daten.hourly, "temperature_2m", m.id, i);
-    const p = wert(daten.hourly, "precipitation", m.id, i);
-    if (t === null && p === null) continue;
-    zeilen += "<tr><td>" + m.name + "</td><td>" +
+    const t = wert(h,"temperature_2m",m.id,i);
+    const p = wert(h,"precipitation",m.id,i);
+    const w = wert(h,"wind_speed_10m",m.id,i);
+    if (t === null && p === null && w === null) continue;
+    zeilen += "<tr><td><b>" + m.name + "</b><br><span style='color:var(--faint);font-size:11px'>" +
+      m.hinweis + "</span></td><td>" +
       (t !== null ? t.toFixed(1) + "°" : "–") + "</td><td>" +
-      (p !== null ? p.toFixed(1) + " mm" : "–") + "</td></tr>";
+      (p !== null ? p.toFixed(1) + " mm" : "–") + "</td><td>" +
+      (w !== null ? Math.round(w) + " km/h" : "–") + "</td></tr>";
   }
-  return "<table><tr><td><strong>Modell</strong></td><td><strong>Temp.</strong></td><td><strong>Niederschl.</strong></td></tr>" +
-    zeilen + "</table>";
+  $("detailtabelle").innerHTML = zeilen;
+
+  const s = spanne(i);
+  if (!s){
+    $("detailfazit").textContent = "Für diese Stunde liefert nur ein Modell Werte – ein Vergleich ist nicht möglich.";
+  } else {
+    let text = "Die Modelle liegen " + s.breite.toFixed(1) + "° auseinander (" +
+      s.min.toFixed(1) + "° bis " + s.max.toFixed(1) + "°). ";
+    if (s.stufe === "ok") text += "Das ist eine verlässliche Prognose.";
+    else if (s.stufe === "mid") text += "Die Richtung stimmt, der genaue Wert ist noch offen.";
+    else text += "Hier ist die Lage unsicher – am besten später nochmal nachsehen.";
+    if (s.streit) text += " Beim Niederschlag sind sich die Modelle uneinig: nicht alle sehen Regen.";
+    $("detailfazit").textContent = text;
+  }
+  $("detail").classList.remove("weg");
+  $("detail").scrollIntoView({ behavior:"smooth", block:"nearest" });
 }
+$("detailZu").onclick = () => {
+  $("detail").classList.add("weg");
+  zustand.gewaehlteStunde = null;
+  zeichneStunden();
+};
 
+/* ---------- 7 Tage ---------- */
 function zeichneTage(){
-  const d = daten.daily;
-  const el = document.getElementById("liste");
-  el.innerHTML = "";
-  const namen = ["Sonntag","Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag"];
-  d.time.forEach((t, i) => {
+  const d = zustand.daten.daily;
+  const box = $("tage");
+  const maxima = (d.temperature_2m_max_best_match || d.temperature_2m_max || []).filter(v => v != null);
+  const minima = (d.temperature_2m_min_best_match || d.temperature_2m_min || []).filter(v => v != null);
+  const hatSpannen = maxima.length > 0 && minima.length > 0;
+  const gMin = hatSpannen ? Math.min(...minima) : 0;
+  const gMax = hatSpannen ? Math.max(...maxima) : 1;
+  const bereich = Math.max(1, gMax - gMin);
+
+  box.innerHTML = "";
+  d.time.forEach((t,i) => {
     const dt = new Date(t + "T12:00");
-    const code = anzeigeWert(d, "weather_code", i);
-    const max = anzeigeWert(d, "temperature_2m_max", i);
-    const min = anzeigeWert(d, "temperature_2m_min", i);
-    const prob = anzeigeWert(d, "precipitation_probability_max", i);
-    const summe = anzeigeWert(d, "precipitation_sum", i);
-    const wind = anzeigeWert(d, "wind_speed_10m_max", i);
+    const code = anzeige(d,"weather_code",i);
+    const max = anzeige(d,"temperature_2m_max",i);
+    const min = anzeige(d,"temperature_2m_min",i);
+    const prob = runde(anzeige(d,"precipitation_probability_max",i));
 
-    let meta = [];
-    if (prob !== null) meta.push("☂️ " + Math.round(prob) + " %");
-    if (summe !== null && summe >= 0.1) meta.push(summe.toFixed(1) + " mm");
-    if (wind !== null) meta.push("🧭 bis " + Math.round(wind) + " km/h");
+    const zeigeSpanne = hatSpannen && max !== null && min !== null;
+    const links = zeigeSpanne ? ((min - gMin) / bereich) * 100 : 0;
+    const weite = zeigeSpanne ? Math.max(6, ((max - min) / bereich) * 100) : 0;
 
-    const z = document.createElement("div");
-    z.className = "tzeile";
-    z.setAttribute("role", "button");
-    z.tabIndex = 0;
-    z.innerHTML =
-      '<div class="z-zeit">' + (i === 0 ? "Heute" : namen[dt.getDay()]) +
-        '<div class="z-meta">' + dt.getDate() + "." + (dt.getMonth() + 1) + ".</div></div>" +
-      '<div class="z-icon">' + wmoIcon(code, false) + "</div>" +
-      '<div><div class="z-cond">' + wmoText(code) + '</div><div class="z-meta">' + meta.join(" · ") + "</div></div>" +
-      '<div class="z-temp"><span class="t-max">' + (max !== null ? Math.round(max) + "°" : "–") +
-        '</span> <span class="t-min">' + (min !== null ? Math.round(min) + "°" : "–") + "</span></div>";
-    const oeffne = () => { tagIndex = i; ansicht = "stunden";
-      document.getElementById("btnAnsicht").textContent = "7 Tage";
-      document.getElementById("btnAnsicht").classList.remove("aktiv");
-      zeichneLeiste(); zeichneListe(); };
-    z.onclick = oeffne;
-    z.onkeydown = ev => { if (ev.key === "Enter" || ev.key === " "){ ev.preventDefault(); oeffne(); } };
-    el.appendChild(z);
+    const b = document.createElement("button");
+    b.className = "tagzeile" + (i === zustand.tagIndex ? " aktiv" : "");
+    b.innerHTML =
+      "<b>" + (i === 0 ? "Heute" : WOCHE[dt.getDay()]) + "</b>" +
+      '<span class="ikon">' + wmoIkon(code,false) + "</span>" +
+      '<span class="spanne"><i style="left:' + links.toFixed(1) + "%;width:" + weite.toFixed(1) + '%"></i></span>' +
+      '<span class="werte">' + (runde(max) ?? "--") + "° <span>" + (runde(min) ?? "--") + "°</span>" +
+      (prob ? "<br><span style='font-size:10.5px'>☂ " + prob + " %</span>" : "") + "</span>";
+    b.onclick = () => {
+      zustand.tagIndex = i;
+      zustand.gewaehlteStunde = null;
+      $("detail").classList.add("weg");
+      zeichneTagleiste(); zeichneStunden(); zeichneBand(); zeichneTage();
+      $("stundenkarte").scrollIntoView({ behavior:"smooth", block:"start" });
+    };
+    box.appendChild(b);
   });
 }
 
-function zeichneListe(){
-  if (ansicht === "stunden") zeichneStunden(); else zeichneTage();
+/* ---------- Modelle heute ---------- */
+function zeichneModelle(){
+  const d = zustand.daten;
+  const box = $("modelle");
+  const werte = [];
+  box.innerHTML = "";
+
+  for (const m of MODELLE){
+    const jetzt = wert(d.current,"temperature_2m",m.id,0);
+    const max = wert(d.daily,"temperature_2m_max",m.id,0);
+    const min = wert(d.daily,"temperature_2m_min",m.id,0);
+    const regen = wert(d.daily,"precipitation_sum",m.id,0);
+    if (jetzt === null && max === null && min === null) continue;
+    if (m.id !== "best_match" && jetzt !== null) werte.push(jetzt);
+    const el = document.createElement("div");
+    el.className = "modellzeile";
+    el.innerHTML = "<div><b>" + m.name + "</b><em>" + m.hinweis + "</em></div>" +
+      "<div style='text-align:right'>" +
+      (jetzt !== null ? jetzt.toFixed(1) + "°" : "–") +
+      "<em>" + (max !== null ? Math.round(max) + "° / " + Math.round(min) + "°" : "kein Wert") +
+      (regen !== null ? " · " + regen.toFixed(1) + " mm" : "") + "</em></div>";
+    box.appendChild(el);
+  }
+
+  if (werte.length < 2){
+    $("fazit").textContent = "Der Vergleich braucht mindestens zwei Modelle. Für diesen Ort liefert Open-Meteo gerade nur eines.";
+    return;
+  }
+  const breite = Math.max(...werte) - Math.min(...werte);
+  let satz;
+  if (breite <= 1) satz = "Die Modelle sind sich für den aktuellen Zeitpunkt praktisch einig (" + breite.toFixed(1) + "° Unterschied).";
+  else if (breite <= 2.5) satz = "Kleine Abweichungen von " + breite.toFixed(1) + "° – die Prognose ist belastbar.";
+  else satz = "Die Modelle liegen " + breite.toFixed(1) + "° auseinander. Bei so einer Streuung lohnt ein zweiter Blick am Abend.";
+  $("fazit").textContent = satz;
 }
 
+/* ---------- Sonne und Mond ---------- */
+function zeichneAstro(){
+  const d = zustand.daten.daily;
+  const i = zustand.tagIndex;
+  const auf = serie(d,"sunrise","best_match"), unter = serie(d,"sunset","best_match");
+  if (!auf || !unter) return;
+  $("aufgang").textContent = uhr(auf[i]);
+  $("untergang").textContent = uhr(unter[i]);
+
+  const dauer = (new Date(unter[i]) - new Date(auf[i])) / 60000;
+  const std = Math.floor(dauer/60), min = Math.round(dauer%60);
+  let text = "Tageslänge " + std + " Std " + min + " Min";
+  if (i > 0){
+    const vorher = (new Date(unter[i-1]) - new Date(auf[i-1])) / 60000;
+    const diff = Math.round(dauer - vorher);
+    if (diff !== 0) text += " · " + (diff > 0 ? "+" : "") + diff + " Min gegenüber dem Vortag";
+  }
+  $("tageslaenge").textContent = text;
+
+  const phase = mondphase(new Date(d.time[i] + "T12:00"));
+  $("mondikon").textContent = phase.ikon;
+  $("mondtext").textContent = phase.name + " · " + phase.beleuchtung + " % beleuchtet";
+}
+
+function mondphase(datum){
+  // Referenz: Neumond am 6. Januar 2000, 18:14 UTC
+  const synodisch = 29.530588853;
+  const referenz = Date.UTC(2000,0,6,18,14) / 86400000;
+  const tage = datum.getTime()/86400000 - referenz;
+  let alter = ((tage % synodisch) + synodisch) % synodisch;
+  const anteil = alter / synodisch;
+  const beleuchtung = Math.round((1 - Math.cos(2*Math.PI*anteil)) / 2 * 100);
+  const stufen = [
+    [0.03,"Neumond","🌑"], [0.22,"Zunehmende Sichel","🌒"], [0.28,"Erstes Viertel","🌓"],
+    [0.47,"Zunehmender Mond","🌔"], [0.53,"Vollmond","🌕"], [0.72,"Abnehmender Mond","🌖"],
+    [0.78,"Letztes Viertel","🌗"], [0.97,"Abnehmende Sichel","🌘"], [1.01,"Neumond","🌑"]
+  ];
+  for (const [grenze,name,ikon] of stufen){
+    if (anteil < grenze) return { name, ikon, beleuchtung };
+  }
+  return { name:"Neumond", ikon:"🌑", beleuchtung };
+}
+
+/* ---------- Luftqualität ---------- */
+function zeichneLuft(){
+  const a = zustand.luft && zustand.luft.current;
+  if (!a){
+    $("luftzahl").textContent = "--";
+    $("lufttext").textContent = "gerade nicht abrufbar";
+    $("luftdetail").textContent = "";
+    return;
+  }
+  const aqi = Math.round(a.european_aqi ?? 0);
+  let stufe = "sehr gut";
+  if (aqi > 20) stufe = "gut";
+  if (aqi > 40) stufe = "mässig";
+  if (aqi > 60) stufe = "schlecht";
+  if (aqi > 80) stufe = "sehr schlecht";
+  $("luftzahl").textContent = aqi || "--";
+  $("lufttext").textContent = stufe + " (europäischer Index)";
+  $("luftpunkt").style.marginLeft = "calc(" + Math.min(96, Math.max(0, aqi)) + "% - 6px)";
+  const teile = [];
+  if (a.pm2_5 != null) teile.push("PM2.5 " + Number(a.pm2_5).toFixed(1) + " µg/m³");
+  if (a.pm10 != null) teile.push("PM10 " + Number(a.pm10).toFixed(1) + " µg/m³");
+  $("luftdetail").textContent = teile.join(" · ");
+}
+
+/* ---------- Favoriten ---------- */
+function zeichneFavoriten(){
+  const box = $("favliste");
+  if (!zustand.favoriten.length){
+    box.innerHTML = '<div class="leer">Noch nichts gemerkt. Tippe unten auf „Aktuellen Ort merken".</div>';
+  } else {
+    box.innerHTML = "";
+    zustand.favoriten.slice(0,8).forEach((f,i) => {
+      const b = document.createElement("button");
+      b.className = "fav";
+      b.innerHTML = "<b>" + fahne(f.code) + " " + f.name + "</b><small>" +
+        (f.land || "") + "</small>" +
+        (zustand.favBearbeiten ? '<span class="weglassen">×</span>' : "");
+      b.onclick = () => {
+        if (zustand.favBearbeiten){
+          zustand.favoriten.splice(i,1);
+          merker.schreib("wac-favoriten", zustand.favoriten);
+          zeichneFavoriten(); zeichneHero();
+          hinweis("Ort entfernt");
+        } else {
+          zustand.ort = f;
+          ladeAlles();
+        }
+      };
+      box.appendChild(b);
+    });
+  }
+  $("btnFavBearbeiten").textContent = zustand.favBearbeiten ? "Fertig" : "Bearbeiten";
+  $("btnFavBearbeiten").classList.toggle("aktiv", zustand.favBearbeiten);
+}
+$("btnFavBearbeiten").onclick = () => {
+  zustand.favBearbeiten = !zustand.favBearbeiten;
+  zeichneFavoriten();
+};
+function merkeOrt(){
+  const o = zustand.ort;
+  if (zustand.favoriten.some(f => nahe(f,o))){
+    zustand.favoriten = zustand.favoriten.filter(f => !nahe(f,o));
+    hinweis(o.name + " entfernt");
+  } else {
+    zustand.favoriten.unshift(o);
+    zustand.favoriten = zustand.favoriten.slice(0,8);
+    hinweis(o.name + " gemerkt");
+  }
+  merker.schreib("wac-favoriten", zustand.favoriten);
+  zeichneFavoriten(); zeichneHero();
+}
+$("favzufuegen").onclick = merkeOrt;
+$("stern").onclick = merkeOrt;
+
+/* ---------- Radar ---------- */
+let karte = null, radarBilder = [], radarSchicht = null, radarLauf = null, radarPos = 0, radarHost = "";
+
+function radarZeitText(unix){
+  return new Date(unix*1000).toLocaleString("de-CH",{ weekday:"short", hour:"2-digit", minute:"2-digit" });
+}
+function zeigeRadarBild(k){
+  if (!radarBilder.length || !karte) return;
+  radarPos = Math.max(0, Math.min(k, radarBilder.length - 1));
+  const bild = radarBilder[radarPos];
+  if (radarSchicht) karte.removeLayer(radarSchicht);
+  radarSchicht = L.tileLayer(radarHost + bild.path + "/256/{z}/{x}/{y}/3/1_1.png",
+    { tileSize:256, opacity:.75, maxNativeZoom:7, maxZoom:12 }).addTo(karte);
+  $("radarschieber").value = radarPos;
+  $("radarzeit").textContent = radarZeitText(bild.time) + " Uhr";
+  $("radarstatus").textContent = radarPos === radarBilder.length - 1
+    ? "Neueste verfügbare Messung" : "Vergangene Messung";
+}
+function radarStopp(){
+  if (radarLauf){ clearInterval(radarLauf); radarLauf = null; }
+  $("radarStart").textContent = "▶ Abspielen";
+}
+function radarAbspielen(){
+  if (radarLauf){ radarStopp(); return; }
+  if (!radarBilder.length) return;
+  $("radarStart").textContent = "❚❚ Pause";
+  if (radarPos >= radarBilder.length - 1) radarPos = 0;
+  radarLauf = setInterval(() => {
+    zeigeRadarBild(radarPos);
+    radarPos++;
+    if (radarPos >= radarBilder.length){ radarStopp(); zeigeRadarBild(radarBilder.length - 1); }
+  }, 620);
+}
+
+async function ladeRadar(){
+  if (typeof L === "undefined"){
+    // Leaflet wird per defer geladen und ist womöglich noch nicht da
+    if (document.readyState !== "complete"){
+      window.addEventListener("load", ladeRadar, { once:true });
+      return;
+    }
+    $("radarzeit").textContent = "Kartenbibliothek nicht geladen";
+    $("radarstatus").textContent = "Radar braucht eine Internetverbindung";
+    return;
+  }
+  const o = zustand.ort;
+  try {
+    if (!karte){
+      karte = L.map("radar", { zoomControl:true, attributionControl:true }).setView([o.lat,o.lon], 7);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+        { maxZoom:19, attribution:"© OpenStreetMap" }).addTo(karte);
+      $("radarschieber").addEventListener("input", e => { radarStopp(); zeigeRadarBild(Number(e.target.value)); });
+      $("radarStart").addEventListener("click", radarAbspielen);
+    } else {
+      karte.setView([o.lat,o.lon], 7);
+      karte.eachLayer(l => { if (l instanceof L.CircleMarker) karte.removeLayer(l); });
+    }
+    L.circleMarker([o.lat,o.lon], { radius:6, color:"#fff", weight:2, fillColor:"#e4776b", fillOpacity:1 })
+      .addTo(karte).bindTooltip(o.name);
+    setTimeout(() => karte.invalidateSize(), 200);
+
+    radarStopp();
+    const rv = await holen("https://api.rainviewer.com/public/weather-maps.json");
+    radarHost = rv.host;
+    radarBilder = [...(rv.radar && rv.radar.past || []), ...(rv.radar && rv.radar.nowcast || [])];
+    if (!radarBilder.length){
+      $("radarzeit").textContent = "Keine Radarbilder verfügbar";
+      $("radarstatus").textContent = "";
+      return;
+    }
+    $("radarschieber").max = radarBilder.length - 1;
+    zeigeRadarBild(radarBilder.length - 1);
+  } catch {
+    $("radarzeit").textContent = "Radar gerade nicht erreichbar";
+    $("radarstatus").textContent = "Später nochmal versuchen";
+  }
+}
+
+/* ---------- Alles zeichnen ---------- */
 function zeichneAlles(){
-  document.getElementById("ortName").innerHTML = ort.name +
-    "<small>" + [ort.admin, ort.land].filter(Boolean).join(", ") + "</small>";
-  setzeHintergrund();
-  zeichneAktuell();
-  zeichneLeiste();
-  zeichneListe();
+  setzeSzene();
+  zeichneHero();
+  zeichneNowcast();
+  zeichneBand();
+  zeichneTagleiste();
+  zeichneStunden();
+  zeichneTage();
+  zeichneModelle();
+  zeichneAstro();
+  zeichneFavoriten();
+  $("stand").textContent = "v" + VERSION + " · aktualisiert " +
+    zustand.abgerufen.toLocaleTimeString("de-CH",{ hour:"2-digit", minute:"2-digit" }) + " Uhr";
 }
 
-/* ---------------- Bedienung ---------------- */
-document.getElementById("btnSuche").onclick = () => {
-  const b = document.getElementById("suchbox");
-  b.classList.toggle("offen");
-  if (b.classList.contains("offen")) document.getElementById("suchfeld").focus();
-};
-document.getElementById("suchfeld").addEventListener("input", e => {
-  clearTimeout(suchTimer);
-  suchTimer = setTimeout(() => sucheOrte(e.target.value), 350);
-});
-document.getElementById("btnWebcam").onclick = () => {
-  window.open("https://www.google.com/search?q=" + encodeURIComponent("Webcam " + ort.name + " live"), "_blank");
-};
-document.getElementById("btnAnsicht").onclick = function(){
-  ansicht = (ansicht === "stunden") ? "tage" : "stunden";
-  this.textContent = (ansicht === "stunden") ? "7 Tage" : "Stunden";
-  this.classList.toggle("aktiv", ansicht === "tage");
-  zeichneLeiste();
-  zeichneListe();
-};
-document.getElementById("btnNeu").onclick = ladeWetter;
+/* ---------- Start ---------- */
+zeichneFavoriten();
+ladeAlles();
 
-/* Start: Schaffhausen laden */
-ladeWetter();
+// Beim Zurückkehren zur App: Daten auffrischen, wenn sie älter als 10 Minuten sind
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && zustand.abgerufen &&
+      Date.now() - zustand.abgerufen.getTime() > 600000){
+    ladeAlles();
+  }
+});
 </script>
 </body>
 </html>
