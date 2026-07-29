@@ -148,10 +148,25 @@ h3.titel{font-size:14px;font-weight:650;letter-spacing:-.1px;margin-bottom:10px}
 /* ---------- Konsensband (Signature) ---------- */
 #bandkarte{padding:14px;margin-bottom:10px}
 #bandkopf{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
-#bandhinweis{font-size:11.5px;color:var(--faint)}
+#bandhinweis{font-size:11.5px;color:var(--faint);margin-top:10px}
 #band{width:100%;height:auto;display:block;margin-top:8px;overflow:visible}
 #bandlegende{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--dim);margin-top:8px}
 #bandlegende span{display:flex;align-items:center;gap:5px}
+#bandumschalter{display:flex;gap:6px}
+#bandumschalter .knopf{padding:7px 11px;font-size:12px}
+#wkarte{height:360px;border-radius:12px;overflow:hidden;background:rgba(3,16,25,.5);margin-top:10px}
+#wkartebedienung{display:flex;align-items:center;gap:12px;margin-top:10px;flex-wrap:wrap}
+#wkartezeit{font-size:12.5px;font-weight:600}
+#wkartestatus{display:block;font-size:10.5px;color:var(--faint);font-weight:400}
+#wkartelegende{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--dim);margin-top:8px}
+.wpin-huelle{background:none;border:0}
+.wpin{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  width:52px;height:44px;border-radius:11px;line-height:1;
+  background:rgba(6,26,38,.82);border:1px solid rgba(255,255,255,.18);
+  box-shadow:0 4px 12px rgba(0,0,0,.35);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+.wpin b{font-size:13px;font-weight:700;margin-top:3px;letter-spacing:-.3px}
+.wpin span{font-size:16px}
+.wpin.hier{border-color:var(--cyan);box-shadow:0 0 0 2px rgba(111,211,232,.45),0 4px 12px rgba(0,0,0,.35)}
 .pkt{width:9px;height:9px;border-radius:50%;display:inline-block;flex:0 0 auto}
 .p-ok{background:var(--gruen)}.p-mid{background:var(--gelb)}.p-bad{background:var(--rot)}
 
@@ -266,6 +281,8 @@ h3.titel{font-size:14px;font-weight:650;letter-spacing:-.1px;margin-bottom:10px}
   #hauptikon{font-size:52px}
   #ortname{font-size:22px}
   #radar{height:260px}
+  #wkarte{height:300px}
+  #bandkopf{align-items:center}
 }
 </style>
 </head>
@@ -324,17 +341,37 @@ h3.titel{font-size:14px;font-weight:650;letter-spacing:-.1px;margin-bottom:10px}
   <section id="bandkarte" class="glas">
     <div id="bandkopf">
       <div>
-        <div class="eyebrow">Signature</div>
-        <h3 class="titel" style="margin:2px 0 0">Temperaturverlauf mit Modellspanne</h3>
+        <div class="eyebrow" id="bandeyebrow">Wetterkarte</div>
+        <h3 class="titel" id="bandtitel" style="margin:2px 0 0">Aktuelles Wetter in der Region</h3>
       </div>
-      <div id="bandhinweis">Die Bandbreite zeigt, wie weit die Modelle auseinanderliegen.</div>
+      <div id="bandumschalter">
+        <button class="knopf aktiv" id="btnKarte">Wetterkarte</button>
+        <button class="knopf" id="btnVerlauf">Temperaturverlauf</button>
+      </div>
     </div>
-    <svg id="band" viewBox="0 0 740 230" role="img"
-         aria-label="Temperaturverlauf mit Spannweite der Wettermodelle"></svg>
-    <div id="bandlegende">
-      <span><i class="pkt p-ok"></i> Modelle einig (bis 2°)</span>
-      <span><i class="pkt p-mid"></i> leicht uneinig (bis 4°)</span>
-      <span><i class="pkt p-bad"></i> deutlich uneinig</span>
+
+    <div id="ansichtKarte">
+      <div id="wkarte"></div>
+      <div id="wkartebedienung">
+        <button class="knopf" id="wkarteNeu">↻ Aktualisieren</button>
+        <div><b id="wkartezeit">Karte wird geladen …</b><small id="wkartestatus">Einen Moment</small></div>
+      </div>
+      <div id="wkartelegende">
+        <span>☀️ sonnig</span><span>⛅ bewölkt</span><span>☁️ bedeckt</span>
+        <span>🌫️ Nebel</span><span>🌧️ Regen</span><span>🌨️ Schnee</span>
+        <span>⛈️ Gewitter</span><span>💨 Sturm (Böen ab 60 km/h)</span>
+      </div>
+    </div>
+
+    <div id="ansichtVerlauf" class="weg">
+      <div id="bandhinweis">Die Bandbreite zeigt, wie weit die Modelle auseinanderliegen.</div>
+      <svg id="band" viewBox="0 0 740 230" role="img"
+           aria-label="Temperaturverlauf mit Spannweite der Wettermodelle"></svg>
+      <div id="bandlegende">
+        <span><i class="pkt p-ok"></i> Modelle einig (bis 2°)</span>
+        <span><i class="pkt p-mid"></i> leicht uneinig (bis 4°)</span>
+        <span><i class="pkt p-bad"></i> deutlich uneinig</span>
+      </div>
     </div>
   </section>
 
@@ -418,7 +455,7 @@ h3.titel{font-size:14px;font-weight:650;letter-spacing:-.1px;margin-bottom:10px}
 
   <footer id="fuss" class="glas">
     <span>Daten: Open-Meteo · ICON (DWD) · ECMWF · GFS (NOAA) · Radar: RainViewer · Karte: OpenStreetMap</span>
-    <span id="stand">v3.0 · noch nicht aktualisiert</span>
+    <span id="stand">v3.2 · noch nicht aktualisiert</span>
   </footer>
 
 </main>
@@ -430,12 +467,12 @@ h3.titel{font-size:14px;font-weight:650;letter-spacing:-.1px;margin-bottom:10px}
 "use strict";
 
 /* =========================================================
-   Weather AC 3.0
+   Weather AC 3.2
    Ein Wetterbild aus drei Modellen – inklusive der Frage,
    wie sicher sich diese drei eigentlich sind.
    ========================================================= */
 
-const VERSION = "3.1";
+const VERSION = "3.2";
 const $ = id => document.getElementById(id);
 
 /* ---------- Modelle ---------- */
@@ -1338,12 +1375,159 @@ async function ladeRadar(){
   }
 }
 
+/* =========================================================
+   Wetterkarte – aktuelle Temperaturen und Wetterzeichen
+   Ein Gitter über den sichtbaren Kartenausschnitt, alle
+   Punkte in einer einzigen Anfrage an Open-Meteo.
+   ========================================================= */
+let wkarte = null, wpins = [], wladen = false, wTimer = null, wAnsicht = "karte";
+
+const TEMPFARBEN = [
+  [-10,"#a9c8ff"], [0,"#8fd6ff"], [5,"#7ee6dc"], [10,"#86e39a"],
+  [15,"#d7e86f"], [20,"#ffd166"], [25,"#ff9f45"], [30,"#ff6f52"]
+];
+function tempFarbe(t){
+  if (t === null || t === undefined) return "#ffffff";
+  for (const [grenze, farbe] of TEMPFARBEN) if (t < grenze) return farbe;
+  return "#ff4d4d";
+}
+
+/* Gitter über den aktuell sichtbaren Ausschnitt */
+function gitterPunkte(){
+  const b = wkarte.getBounds(), g = wkarte.getSize();
+  const spalten = Math.max(3, Math.min(7, Math.round(g.x / 105)));
+  const zeilen  = Math.max(3, Math.min(6, Math.round(g.y / 88)));
+  const sued = Math.max(-84, b.getSouth()), nord = Math.min(84, b.getNorth());
+  const west = b.getWest(), ost = b.getEast();
+  const punkte = [];
+  for (let z = 0; z < zeilen; z++){
+    for (let s = 0; s < spalten; s++){
+      const lat = sued + (nord - sued) * (z + 0.5) / zeilen;
+      let lon = west + (ost - west) * (s + 0.5) / spalten;
+      lon = ((lon + 180) % 360 + 360) % 360 - 180;
+      punkte.push([Number(lat.toFixed(3)), Number(lon.toFixed(3))]);
+    }
+  }
+  return punkte;
+}
+
+function pinsWeg(){
+  wpins.forEach(p => wkarte.removeLayer(p));
+  wpins = [];
+}
+
+async function ladeWetterpunkte(){
+  if (!wkarte || wladen) return;
+  wladen = true;
+  $("wkartestatus").textContent = "Werte werden abgerufen …";
+  const punkte = gitterPunkte();
+  try {
+    const url = "https://api.open-meteo.com/v1/forecast" +
+      "?latitude="  + punkte.map(p => p[0]).join(",") +
+      "&longitude=" + punkte.map(p => p[1]).join(",") +
+      "&current=temperature_2m,weather_code,is_day,wind_gusts_10m" +
+      "&timezone=auto";
+    const antwort = await holen(url);
+    const liste = Array.isArray(antwort) ? antwort : [antwort];
+
+    pinsWeg();
+    const o = zustand.ort;
+    liste.forEach((eintrag, i) => {
+      const c = eintrag && eintrag.current;
+      const stelle = punkte[i];
+      if (!c || !stelle) return;
+      const t = runde(c.temperature_2m);
+      const sturm = c.wind_gusts_10m != null && c.wind_gusts_10m >= 60;
+      const zeichen = sturm ? "💨" : wmoIkon(c.weather_code, !c.is_day);
+      const nah = Math.abs(stelle[0] - o.lat) < 0.35 && Math.abs(stelle[1] - o.lon) < 0.5;
+      const pin = L.marker(stelle, {
+        icon: L.divIcon({
+          className: "wpin-huelle",
+          html: '<div class="wpin' + (nah ? " hier" : "") + '"><span>' + zeichen +
+                '</span><b style="color:' + tempFarbe(t) + '">' + (t === null ? "–" : t + "°") + '</b></div>',
+          iconSize: [52,44], iconAnchor: [26,22]
+        }),
+        keyboard: false
+      }).addTo(wkarte);
+      pin.bindTooltip(wmoText(c.weather_code) + " · " + (t === null ? "–" : t + "°") +
+                      (sturm ? " · Böen " + Math.round(c.wind_gusts_10m) + " km/h" : ""));
+      wpins.push(pin);
+    });
+
+    const jetzt = new Date();
+    $("wkartezeit").textContent = "Stand " +
+      jetzt.toLocaleTimeString("de-CH",{ hour:"2-digit", minute:"2-digit" }) + " Uhr";
+    $("wkartestatus").textContent = liste.length + " Messpunkte · beim Zoomen und Verschieben neu geladen";
+  } catch {
+    $("wkartezeit").textContent = "Wetterkarte gerade nicht erreichbar";
+    $("wkartestatus").textContent = "Später nochmal versuchen";
+  } finally {
+    wladen = false;
+  }
+}
+
+function wetterpunkteSpaeter(verzoegerung = 700){
+  clearTimeout(wTimer);
+  wTimer = setTimeout(ladeWetterpunkte, verzoegerung);
+}
+
+function ladeWetterkarte(){
+  if (wAnsicht !== "karte") return;
+  if (typeof L === "undefined"){
+    if (document.readyState !== "complete"){
+      window.addEventListener("load", ladeWetterkarte, { once:true });
+      return;
+    }
+    $("wkartezeit").textContent = "Kartenbibliothek nicht geladen";
+    $("wkartestatus").textContent = "Die Karte braucht eine Internetverbindung";
+    return;
+  }
+  const o = zustand.ort;
+  if (!wkarte){
+    wkarte = L.map("wkarte", { zoomControl:true, attributionControl:true }).setView([o.lat,o.lon], 7);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+      { maxZoom:19, attribution:"© OpenStreetMap" }).addTo(wkarte);
+    wkarte.on("moveend", () => wetterpunkteSpaeter());
+    $("wkarteNeu").addEventListener("click", () => { clearTimeout(wTimer); ladeWetterpunkte(); });
+    setTimeout(() => wkarte.invalidateSize(), 200);
+    ladeWetterpunkte();
+  } else {
+    setTimeout(() => wkarte.invalidateSize(), 100);
+  }
+}
+
+/* Nach einem Ortswechsel: Karte auf den neuen Ort ziehen (das Verschieben
+   löst über "moveend" das Nachladen der Punkte aus). */
+function aktualisiereWetterkarte(){
+  const o = zustand.ort;
+  if (wkarte) wkarte.setView([o.lat,o.lon], wkarte.getZoom());
+  else ladeWetterkarte();
+}
+
+function zeigeAnsicht(welche){
+  wAnsicht = welche;
+  const karte = welche === "karte";
+  $("ansichtKarte").classList.toggle("weg", !karte);
+  $("ansichtVerlauf").classList.toggle("weg", karte);
+  $("btnKarte").classList.toggle("aktiv", karte);
+  $("btnVerlauf").classList.toggle("aktiv", !karte);
+  $("bandeyebrow").textContent = karte ? "Wetterkarte" : "Signature";
+  $("bandtitel").textContent = karte ? "Aktuelles Wetter in der Region"
+                                     : "Temperaturverlauf mit Modellspanne";
+  if (karte) ladeWetterkarte();
+  else if (zustand.daten) zeichneBand();
+}
+
+$("btnKarte").addEventListener("click", () => zeigeAnsicht("karte"));
+$("btnVerlauf").addEventListener("click", () => zeigeAnsicht("verlauf"));
+
 /* ---------- Alles zeichnen ---------- */
 function zeichneAlles(){
   setzeSzene();
   zeichneHero();
   zeichneNowcast();
   zeichneBand();
+  aktualisiereWetterkarte();
   zeichneTagleiste();
   zeichneStunden();
   zeichneTage();
@@ -1356,6 +1540,7 @@ function zeichneAlles(){
 
 /* ---------- Start ---------- */
 zeichneFavoriten();
+ladeWetterkarte();
 ladeAlles();
 
 // Beim Zurückkehren zur App: Daten auffrischen, wenn sie älter als 10 Minuten sind
