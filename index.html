@@ -129,7 +129,10 @@ h3.titel{font-size:14px;font-weight:650;letter-spacing:-.1px;margin-bottom:10px}
 #grad{font-size:76px;font-weight:200;letter-spacing:-4px;line-height:.9}
 #lage{font-size:16px;font-weight:600;margin-top:2px}
 #gefuehlt{font-size:12.5px;color:var(--dim);margin-top:3px}
-#hauptikon{font-size:64px;line-height:1;margin-left:auto}
+#hauptikon{margin-left:auto;width:132px;height:132px;flex:0 0 auto;
+  border-radius:30px;overflow:hidden;position:relative;
+  box-shadow:0 10px 26px rgba(0,0,0,.32)}
+#buehne{display:block;width:100%;height:100%}
 #messwerte{display:grid;grid-template-columns:repeat(2,1fr);gap:7px}
 .mw{border:1px solid var(--line-soft);border-radius:11px;padding:8px 10px;
   background:rgba(255,255,255,.045)}
@@ -278,7 +281,7 @@ h3.titel{font-size:14px;font-weight:650;letter-spacing:-.1px;margin-bottom:10px}
   #suchfeld-wrap{grid-column:1/-1;order:3}
   #hero{grid-template-columns:1fr;gap:14px}
   #grad{font-size:64px}
-  #hauptikon{font-size:52px}
+  #hauptikon{width:108px;height:108px;border-radius:26px}
   #ortname{font-size:22px}
   #radar{height:260px}
   #wkarte{height:300px}
@@ -325,7 +328,9 @@ h3.titel{font-size:14px;font-weight:650;letter-spacing:-.1px;margin-bottom:10px}
           <div id="lage">Lade …</div>
           <div id="gefuehlt"></div>
         </div>
-        <div id="hauptikon">⛅</div>
+        <div id="hauptikon" role="img" aria-label="Wetterbild wird geladen">
+          <canvas id="buehne">⛅</canvas>
+        </div>
       </div>
     </div>
     <div id="messwerte"></div>
@@ -455,7 +460,7 @@ h3.titel{font-size:14px;font-weight:650;letter-spacing:-.1px;margin-bottom:10px}
 
   <footer id="fuss" class="glas">
     <span>Daten: Open-Meteo · ICON (DWD) · ECMWF · GFS (NOAA) · Radar: RainViewer · Karte: OpenStreetMap</span>
-    <span id="stand">v3.3 · noch nicht aktualisiert</span>
+    <span id="stand">v3.4 · noch nicht aktualisiert</span>
   </footer>
 
 </main>
@@ -467,12 +472,12 @@ h3.titel{font-size:14px;font-weight:650;letter-spacing:-.1px;margin-bottom:10px}
 "use strict";
 
 /* =========================================================
-   Weather AC 3.3
+   Weather AC 3.4
    Ein Wetterbild aus drei Modellen – inklusive der Frage,
    wie sicher sich diese drei eigentlich sind.
    ========================================================= */
 
-const VERSION = "3.3";
+const VERSION = "3.4";
 const $ = id => document.getElementById(id);
 
 /* ---------- Modelle ---------- */
@@ -795,10 +800,482 @@ function wetterEffekt(art, nacht){
   }
 }
 
+/* ---------- Wetterbühne: animiertes Himmelsfenster im Hero ----------
+   Zeigt Tageszeit (Sonnenstand aus Auf-/Untergang), Mondphase,
+   Bewölkungsgrad, Windrichtung und -stärke, Niederschlagsart und
+   -menge, Nebel und Gewitter des gesuchten Ortes.                     */
+const buehne = {
+  leinwand:null, ctx:null, kante:0, dpr:0, mass:1,
+  lauf:false, letzte:0, zeit:0,
+  p:null,
+  tropfen:[], flocken:[], sterne:[], wolken:[], streifen:[],
+  blitz:0, naechsterBlitz:0, blitzPfad:null,
+  ruhig:false
+};
+
+const zufall = (a,b) => a + Math.random()*(b-a);
+
+/* Parameter aus den aktuellen Messwerten ableiten */
+function buehneParameter(){
+  const d = zustand.daten;
+  if (!d || !d.current) return null;
+  const c = d.current;
+  const code = anzeige(c,"weather_code",0) ?? 0;
+  const art  = wmo(code)[3];
+
+  /* Sonnenstand: Anteil zwischen Auf- und Untergang */
+  const jetzt = new Date(c.time).getTime();
+  let auf = null, unter = null, aufMorgen = null, unterGestern = null;
+  const tag = d.daily;
+  if (tag && tag.time){
+    const i = tag.time.indexOf(String(c.time).slice(0,10));
+    const A = serie(tag,"sunrise","best_match"), U = serie(tag,"sunset","best_match");
+    if (i >= 0 && A && U){
+      auf = new Date(A[i]).getTime();
+      unter = new Date(U[i]).getTime();
+      if (A[i+1]) aufMorgen = new Date(A[i+1]).getTime();
+      if (U[i-1]) unterGestern = new Date(U[i-1]).getTime();
+    }
+  }
+
+  const wind = anzeige(c,"wind_speed_10m",0) ?? 0;
+  const rich = anzeige(c,"wind_direction_10m",0) ?? 270;
+  /* Windrichtung ist die Richtung, AUS der es weht -> Zugrichtung umkehren */
+  const zug = -Math.sin(rich * Math.PI/180);
+
+  let wolkenGrad = anzeige(c,"cloud_cover",0);
+  if (wolkenGrad === null) wolkenGrad = art === "klar" ? 8 : art === "wolke" ? 65 : 90;
+
+  const mond = mondphase(new Date(c.time));
+
+  return {
+    code, art, text: wmoText(code),
+    basis: jetzt, marke: (window.performance ? performance.now() : Date.now()),
+    auf, unter, aufMorgen, unterGestern,
+    istTagFlag: anzeige(c,"is_day",0),
+    grad: wolkenGrad,
+    wind, boeen: anzeige(c,"wind_gusts_10m",0) ?? wind,
+    zug,
+    mm: anzeige(c,"precipitation",0) ?? 0,
+    licht: (mond.beleuchtung ?? 50) / 100,
+    zunehmend: /Zunehmend|Erstes/.test(mond.name),
+    nebel: (code === 45 || code === 48),
+    gewitter: (code >= 95),
+    schnee: (art === "schnee"),
+    regen: (art === "regen")
+  };
+}
+
+/* Stand der Sonne zum laufenden Moment: 1 = Zenit, 0 = Horizont, negativ = Nacht */
+function buehneStand(p){
+  const jetzt = p.basis + ((window.performance ? performance.now() : Date.now()) - p.marke);
+  if (p.auf && p.unter){
+    if (jetzt >= p.auf && jetzt < p.unter){
+      const b = (jetzt - p.auf) / (p.unter - p.auf);
+      return { nacht:false, bogen:b, hoehe:Math.sin(Math.PI*b) };
+    }
+    let start, ende;
+    if (jetzt >= p.unter){ start = p.unter; ende = p.aufMorgen || (p.unter + 10*3600e3); }
+    else { start = p.unterGestern || (p.auf - 10*3600e3); ende = p.auf; }
+    const b = Math.min(1, Math.max(0, (jetzt - start) / (ende - start)));
+    return { nacht:true, bogen:b, hoehe:-Math.sin(Math.PI*b) };
+  }
+  const nacht = p.istTagFlag === 0;
+  return { nacht, bogen:0.5, hoehe: nacht ? -0.6 : 0.7 };
+}
+
+/* Himmelsfarben nach Sonnenstand */
+function buehneHimmel(h){
+  if (h >  0.32) return ["#1a5c9c","#3f88c1","#93c4e2"];
+  if (h >  0.12) return ["#2a5d95","#7280ad","#e2a677"];
+  if (h >  0.00) return ["#243363","#6d4f7c","#e08a5c"];
+  if (h > -0.08) return ["#182553","#3c3a68","#8a5f6e"];
+  if (h > -0.22) return ["#0d1a3c","#1e2a52","#3c3d63"];
+  return ["#04101f","#0c1a32","#182741"];
+}
+
+function buehneAnzahl(p){
+  let regen = 0, flocken = 0;
+  const c = p.code;
+  if (p.regen){
+    if (c >= 51 && c <= 57) regen = 14;
+    else if (c === 61 || c === 80) regen = 22;
+    else if (c === 63 || c === 81) regen = 32;
+    else if (c === 65 || c === 82) regen = 44;
+    else if (c >= 95) regen = 34;
+    else regen = 24;
+    regen += Math.min(16, Math.round(p.mm * 6));
+  }
+  if (p.schnee){
+    if (c === 71 || c === 77) flocken = 12;
+    else if (c === 73 || c === 85) flocken = 18;
+    else flocken = 26;
+  }
+  let wolken = 0;
+  if (p.grad >= 88) wolken = 3;
+  else if (p.grad >= 60) wolken = 2;
+  else if (p.grad >= 30) wolken = 2;
+  else if (p.grad >= 12) wolken = 1;
+  if (p.regen || p.schnee) wolken = Math.max(wolken, 2);
+  if (p.nebel) wolken = Math.max(wolken, 1);
+  return { regen, flocken, wolken };
+}
+
+function buehneSaat(){
+  const p = buehne.p, n = buehneAnzahl(p);
+  const schraeg = Math.max(-0.55, Math.min(0.55, p.zug * p.wind / 45));
+
+  buehne.tropfen = [];
+  for (let i = 0; i < n.regen; i++){
+    const sp = zufall(105,165) * (1 + Math.min(0.5, p.wind/90));
+    buehne.tropfen.push({ x:zufall(-15,115), y:zufall(-30,105), sp,
+      lang:zufall(5,11), al:zufall(.3,.75), schraeg });
+  }
+  buehne.flocken = [];
+  for (let i = 0; i < n.flocken; i++){
+    buehne.flocken.push({ x:zufall(-10,110), y:zufall(-25,105),
+      sp:zufall(9,19), r:zufall(.7,1.7), ph:zufall(0,6.3), al:zufall(.5,.95) });
+  }
+  buehne.sterne = [];
+  const sichtbar = Math.max(0, 1 - p.grad/95);
+  for (let i = 0; i < Math.round(20*sichtbar); i++){
+    buehne.sterne.push({ x:zufall(6,94), y:zufall(6,62), r:zufall(.35,.95), ph:zufall(0,6.3) });
+  }
+  buehne.wolken = [];
+  const stufe = [
+    { s:15, y:31, al:.62 },
+    { s:20, y:40, al:.80 },
+    { s:13, y:24, al:.55 }
+  ];
+  for (let i = 0; i < n.wolken; i++){
+    const k = stufe[i];
+    buehne.wolken.push({ x:zufall(10,90), y:k.y, s:k.s*(p.grad>=88?1.2:1),
+      al:Math.min(1, k.al * (0.45 + p.grad/100)), tief:0.55 + i*0.35 });
+  }
+  buehne.streifen = [];
+  if (p.boeen >= 45){
+    for (let i = 0; i < 3; i++)
+      buehne.streifen.push({ x:zufall(0,100), y:zufall(44,72), l:zufall(14,26), ph:zufall(0,6.3) });
+  }
+  buehne.blitz = 0;
+  buehne.naechsterBlitz = buehne.zeit + zufall(1.2,3.5);
+  buehne.blitzPfad = null;
+}
+
+/* ---------- Zeichenhilfen ---------- */
+function bWolke(ctx,x,y,s,oben,unten,al){
+  ctx.save();
+  ctx.globalAlpha = al;
+  const g = ctx.createLinearGradient(0, y-s*0.8, 0, y+s*0.55);
+  g.addColorStop(0, oben); g.addColorStop(1, unten);
+  ctx.fillStyle = g;
+  const kreis = (cx,cy,r) => { ctx.moveTo(cx+r,cy); ctx.arc(cx,cy,r,0,Math.PI*2); };
+  ctx.beginPath();
+  kreis(x-s*0.62, y+s*0.14, s*0.42);
+  kreis(x-s*0.16, y-s*0.24, s*0.56);
+  kreis(x+s*0.36, y-s*0.02, s*0.46);
+  kreis(x+s*0.80, y+s*0.18, s*0.33);
+  ctx.moveTo(x+s*1.0, y+s*0.34);
+  ctx.ellipse(x+s*0.06, y+s*0.30, s*0.96, s*0.28, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function bSonne(ctx,x,y,r,zeit,frei){
+  ctx.save();
+  const hof = ctx.createRadialGradient(x,y,r*0.4,x,y,r*3.1);
+  hof.addColorStop(0,"rgba(255,226,150,"+(0.42*frei).toFixed(3)+")");
+  hof.addColorStop(1,"rgba(255,214,120,0)");
+  ctx.fillStyle = hof;
+  ctx.beginPath(); ctx.arc(x,y,r*3.1,0,Math.PI*2); ctx.fill();
+
+  ctx.save();
+  ctx.globalAlpha = 0.55*frei;
+  ctx.strokeStyle = "#ffe6a6"; ctx.lineCap = "round";
+  ctx.translate(x,y); ctx.rotate(zeit*0.10);
+  for (let i = 0; i < 12; i++){
+    const lang = 3.4 + Math.sin(zeit*1.5 + i*0.9)*1.5;
+    ctx.lineWidth = i % 2 ? 0.7 : 1.1;
+    ctx.beginPath();
+    ctx.moveTo(r+1.8, 0); ctx.lineTo(r+1.8+lang, 0);
+    ctx.stroke();
+    ctx.rotate(Math.PI/6);
+  }
+  ctx.restore();
+  const s = ctx.createRadialGradient(x-r*0.3,y-r*0.35,r*0.15,x,y,r);
+  s.addColorStop(0,"#fffdf2"); s.addColorStop(0.55,"#ffe17a"); s.addColorStop(1,"#f7b74a");
+  ctx.fillStyle = s;
+  ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
+function bMond(ctx,x,y,r,licht,zunehmend,zeit){
+  ctx.save();
+  const hof = ctx.createRadialGradient(x,y,r*0.5,x,y,r*3.4);
+  hof.addColorStop(0,"rgba(206,224,255,"+(0.10+0.22*licht).toFixed(3)+")");
+  hof.addColorStop(1,"rgba(206,224,255,0)");
+  ctx.fillStyle = hof;
+  ctx.beginPath(); ctx.arc(x,y,r*3.4,0,Math.PI*2); ctx.fill();
+
+  /* unbeleuchtete Scheibe */
+  ctx.fillStyle = "rgba(188,204,232,.13)";
+  ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+
+  const k = Math.min(0.995, Math.max(0.005, licht));
+  if (!zunehmend){ ctx.translate(x,0); ctx.scale(-1,1); ctx.translate(-x,0); }
+  const rx = Math.abs(r*(1-2*k));
+  ctx.beginPath();
+  ctx.ellipse(x,y,r,r,0,-Math.PI/2,Math.PI/2,false);
+  ctx.ellipse(x,y,rx,r,0,Math.PI/2,-Math.PI/2,k < 0.5);
+  ctx.closePath();
+  const g = ctx.createRadialGradient(x-r*0.25,y-r*0.3,r*0.2,x,y,r*1.1);
+  g.addColorStop(0,"#fdfbf3"); g.addColorStop(1,"#dfe3ee");
+  ctx.fillStyle = g; ctx.fill();
+  /* Mare, dezent */
+  ctx.clip();
+  ctx.fillStyle = "rgba(150,160,185,.28)";
+  ctx.beginPath(); ctx.arc(x-r*0.30,y-r*0.18,r*0.26,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x+r*0.22,y+r*0.28,r*0.19,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x+r*0.34,y-r*0.34,r*0.12,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
+function bBlitzPfad(){
+  const x0 = zufall(34,66);
+  const pfad = [[x0,42]];
+  let x = x0, y = 42;
+  while (y < 92){
+    y += zufall(9,15);
+    x += zufall(-9,9);
+    pfad.push([x,y]);
+  }
+  return pfad;
+}
+
+/* ---------- Ein Bild zeichnen ---------- */
+function buehneBild(dt){
+  const ctx = buehne.ctx, p = buehne.p;
+  if (!ctx || !p) return;
+  const st = buehneStand(p);
+  const zeit = buehne.zeit;
+  const farben = buehneHimmel(st.hoehe);
+
+  ctx.setTransform(buehne.mass,0,0,buehne.mass,0,0);
+  ctx.clearRect(0,0,100,100);
+
+  /* Himmel */
+  const g = ctx.createLinearGradient(0,0,0,100);
+  g.addColorStop(0, farben[0]); g.addColorStop(0.55, farben[1]); g.addColorStop(1, farben[2]);
+  ctx.fillStyle = g; ctx.fillRect(0,0,100,100);
+
+  /* Trübung durch Wolken und Niederschlag */
+  let trueb = 0.04 + (p.grad/100)*0.26 + (p.regen ? 0.14 : 0) + (p.nebel ? 0.16 : 0);
+  if (p.gewitter) trueb += 0.10;
+  ctx.fillStyle = p.schnee ? "rgba(150,166,186,"+Math.min(.55,trueb).toFixed(3)+")"
+                           : "rgba(28,38,52,"+Math.min(.62,trueb).toFixed(3)+")";
+  ctx.fillRect(0,0,100,100);
+
+  /* Sterne */
+  if (st.nacht && buehne.sterne.length){
+    for (const s of buehne.sterne){
+      const fl = 0.45 + 0.55*Math.abs(Math.sin(zeit*0.9 + s.ph));
+      ctx.globalAlpha = fl * Math.max(0, 1 - p.grad/95);
+      ctx.fillStyle = "#eaf1ff";
+      ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI*2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  /* Sonne oder Mond auf dem Tagesbogen */
+  const bx = 20 + 60*st.bogen;
+  const frei = Math.max(0.12, 1 - p.grad/100);
+  if (!st.nacht){
+    const by = 62 - 38*Math.max(0.04, st.hoehe);
+    bSonne(ctx, bx, by, 9.4, zeit, frei);
+  } else {
+    const by = 56 - 30*Math.max(0.04, -st.hoehe);
+    bMond(ctx, bx, by, 8.6, p.licht, p.zunehmend, zeit);
+  }
+
+  /* Wolken, Zugrichtung und Tempo nach Wind */
+  const tempo = Math.max(0.5, Math.min(7, p.wind/6));
+  for (const w of buehne.wolken){
+    w.x += p.zug * tempo * w.tief * dt;
+    if (w.x > 128) w.x = -28;
+    if (w.x < -28) w.x = 128;
+    const oben  = st.nacht ? "#5d6a86" : (p.regen || p.grad > 85 ? "#b9c3cf" : "#ffffff");
+    const unten = st.nacht ? "#2f3a52" : (p.regen || p.grad > 85 ? "#7c8898" : "#c9d8e6");
+    bWolke(ctx, w.x, w.y, w.s, oben, unten, w.al);
+  }
+
+  /* Regen */
+  if (buehne.tropfen.length){
+    ctx.lineCap = "round";
+    for (const t of buehne.tropfen){
+      t.y += t.sp*dt;
+      t.x += t.schraeg * t.sp * dt;
+      if (t.y > 104){ t.y = zufall(-24,-4); t.x = zufall(-15,115); }
+      if (t.x > 116) t.x = -14; if (t.x < -16) t.x = 114;
+      const ein = Math.min(1, Math.max(0, (t.y - 22)/16));
+      ctx.strokeStyle = "rgba(186,224,255," + (t.al*ein).toFixed(2) + ")";
+      ctx.lineWidth = 0.9;
+      ctx.beginPath();
+      ctx.moveTo(t.x, t.y);
+      ctx.lineTo(t.x + t.schraeg*t.lang, t.y + t.lang);
+      ctx.stroke();
+    }
+  }
+
+  /* Schnee */
+  if (buehne.flocken.length){
+    for (const f of buehne.flocken){
+      f.y += f.sp*dt;
+      f.x += (Math.sin(zeit*0.8 + f.ph)*3 + p.zug*tempo*0.4) * dt;
+      if (f.y > 104){ f.y = zufall(-20,-2); f.x = zufall(-10,110); }
+      if (f.x > 112) f.x = -10; if (f.x < -12) f.x = 110;
+      const ein = Math.min(1, Math.max(0, (f.y - 20)/16));
+      ctx.fillStyle = "rgba(255,255,255," + (f.al*ein).toFixed(2) + ")";
+      ctx.beginPath(); ctx.arc(f.x, f.y, f.r, 0, Math.PI*2); ctx.fill();
+    }
+  }
+
+  /* Nebel */
+  if (p.nebel){
+    for (let i = 0; i < 4; i++){
+      const y = 46 + i*13;
+      const off = ((zeit*(3 + i*1.6) + i*37) % 200) - 50;
+      const nb = ctx.createLinearGradient(off-40, 0, off+70, 0);
+      nb.addColorStop(0,"rgba(226,234,242,0)");
+      nb.addColorStop(0.5,"rgba(226,234,242,"+(0.20 + i*0.05).toFixed(2)+")");
+      nb.addColorStop(1,"rgba(226,234,242,0)");
+      ctx.fillStyle = nb;
+      ctx.beginPath();
+      ctx.ellipse(off+15, y, 55, 5.5 + i, 0, 0, Math.PI*2);
+      ctx.fill();
+    }
+  }
+
+  /* Böen als Windstreifen */
+  if (buehne.streifen.length){
+    ctx.strokeStyle = "rgba(226,238,252,.20)";
+    ctx.lineWidth = 0.8; ctx.lineCap = "round";
+    for (const s of buehne.streifen){
+      s.x += p.zug * Math.max(6, p.boeen/4) * dt;
+      if (s.x > 130) s.x = -30;
+      if (s.x < -30) s.x = 130;
+      ctx.beginPath();
+      ctx.moveTo(s.x, s.y);
+      ctx.quadraticCurveTo(s.x + s.l*0.5, s.y - 2.2, s.x + s.l, s.y);
+      ctx.stroke();
+    }
+  }
+
+  /* Gewitter */
+  if (p.gewitter){
+    if (zeit >= buehne.naechsterBlitz){
+      buehne.blitz = 1;
+      buehne.blitzPfad = bBlitzPfad();
+      buehne.naechsterBlitz = zeit + zufall(2.2,6.5);
+    }
+    if (buehne.blitz > 0){
+      buehne.blitz = Math.max(0, buehne.blitz - dt*2.6);
+      const s = buehne.blitz;
+      const flackern = s > 0.75 ? 1 : (0.35 + 0.65*Math.abs(Math.sin(s*26)));
+      ctx.fillStyle = "rgba(255,252,235," + (0.34*s*flackern).toFixed(3) + ")";
+      ctx.fillRect(0,0,100,100);
+      if (buehne.blitzPfad){
+        ctx.strokeStyle = "rgba(255,253,226," + Math.min(1, s*1.5).toFixed(2) + ")";
+        ctx.lineWidth = 1.7; ctx.lineJoin = "round";
+        ctx.shadowColor = "rgba(255,246,190,.9)"; ctx.shadowBlur = 6;
+        ctx.beginPath();
+        buehne.blitzPfad.forEach((pt,i) => i ? ctx.lineTo(pt[0],pt[1]) : ctx.moveTo(pt[0],pt[1]));
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
+    }
+  }
+
+  /* Fensterrahmen: oben ein Lichtsaum, unten Tiefe */
+  const kante = ctx.createLinearGradient(0,0,0,100);
+  kante.addColorStop(0,"rgba(255,255,255,.16)");
+  kante.addColorStop(0.25,"rgba(255,255,255,0)");
+  kante.addColorStop(1,"rgba(0,0,0,.20)");
+  ctx.fillStyle = kante; ctx.fillRect(0,0,100,100);
+}
+
+/* ---------- Steuerung ---------- */
+function buehneMasse(){
+  const box = $("hauptikon"), lw = buehne.leinwand;
+  if (!box || !lw) return;
+  const kante = box.clientWidth || 132;
+  const dpr = Math.min(3, window.devicePixelRatio || 1);
+  if (kante === buehne.kante && dpr === buehne.dpr) return;
+  buehne.kante = kante; buehne.dpr = dpr;
+  lw.width = Math.round(kante*dpr);
+  lw.height = Math.round(kante*dpr);
+  buehne.mass = kante*dpr/100;
+}
+
+function buehneSchleife(t){
+  if (!buehne.lauf) return;
+  requestAnimationFrame(buehneSchleife);
+  if (!buehne.letzte) buehne.letzte = t;
+  let dt = (t - buehne.letzte)/1000;
+  if (dt < 0.031) return;              /* rund 30 Bilder je Sekunde genügen */
+  buehne.letzte = t;
+  dt = Math.min(dt, 0.14);
+  buehne.zeit += dt;
+  buehneBild(dt);
+}
+
+function buehneStart(){
+  const lw = $("buehne");
+  if (!lw || !lw.getContext) return;
+  buehne.leinwand = lw;
+  buehne.ctx = lw.getContext("2d");
+  const p = buehneParameter();
+  if (!p) return;
+  buehne.p = p;
+  buehneMasse();
+  buehneSaat();
+
+  const st = buehneStand(p);
+  $("hauptikon").setAttribute("aria-label",
+    p.text + " · " + (st.nacht ? "Nacht" : "Tag"));
+
+  buehne.ruhig = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (buehne.ruhig){
+    buehne.lauf = false;
+    buehneBild(0);
+    return;
+  }
+  if (!buehne.lauf){
+    buehne.lauf = true;
+    buehne.letzte = 0;
+    requestAnimationFrame(buehneSchleife);
+  }
+}
+
+window.addEventListener("resize", () => {
+  if (!buehne.ctx) return;
+  buehneMasse();
+  if (buehne.ruhig) buehneBild(0);
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (!buehne.p || buehne.ruhig) return;
+  if (document.hidden){
+    buehne.lauf = false;
+  } else if (!buehne.lauf){
+    buehne.lauf = true;
+    buehne.letzte = 0;
+    requestAnimationFrame(buehneSchleife);
+  }
+});
+
 function zeichneHero(){
   const d = zustand.daten, c = d.current, o = zustand.ort;
   const code = anzeige(c, "weather_code", 0);
-  const nacht = istNacht(c.time);
 
   $("ortname").innerHTML = fahne(o.code) + " " + o.name;
   $("ortzeit").textContent = new Date(c.time).toLocaleString("de-CH",
@@ -807,7 +1284,7 @@ function zeichneHero(){
 
   $("grad").textContent = (runde(anzeige(c,"temperature_2m",0)) ?? "--") + "°";
   $("lage").textContent = wmoText(code);
-  $("hauptikon").textContent = wmoIkon(code, nacht);
+  buehneStart();
 
   const gef = runde(anzeige(c,"apparent_temperature",0));
   $("gefuehlt").textContent = gef !== null ? "gefühlt " + gef + "°" : "";
