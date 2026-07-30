@@ -460,7 +460,7 @@ h3.titel{font-size:14px;font-weight:650;letter-spacing:-.1px;margin-bottom:10px}
 
   <footer id="fuss" class="glas">
     <span>Daten: Open-Meteo · ICON (DWD) · ECMWF · GFS (NOAA) · Radar: RainViewer · Karte: OpenStreetMap</span>
-    <span id="stand">v3.4 · noch nicht aktualisiert</span>
+    <span id="stand">v3.5 · noch nicht aktualisiert</span>
   </footer>
 
 </main>
@@ -472,12 +472,12 @@ h3.titel{font-size:14px;font-weight:650;letter-spacing:-.1px;margin-bottom:10px}
 "use strict";
 
 /* =========================================================
-   Weather AC 3.4
+   Weather AC 3.5
    Ein Wetterbild aus drei Modellen – inklusive der Frage,
    wie sicher sich diese drei eigentlich sind.
    ========================================================= */
 
-const VERSION = "3.4";
+const VERSION = "3.5";
 const $ = id => document.getElementById(id);
 
 /* ---------- Modelle ---------- */
@@ -1871,9 +1871,8 @@ function tempFarbe(t){
 
 /* Gitter über den aktuell sichtbaren Ausschnitt */
 function gitterPunkte(){
-  const b = wkarte.getBounds(), g = wkarte.getSize();
-  const spalten = Math.max(2, Math.min(5, Math.round(g.x / 175)));
-  const zeilen  = Math.max(2, Math.min(4, Math.round(g.y / 150)));
+  const b = wkarte.getBounds();
+  const spalten = 2, zeilen = 2;   /* fest vier Messpunkte, auf jedem Gerät */
   const sued = Math.max(-84, b.getSouth()), nord = Math.min(84, b.getNorth());
   const west = b.getWest(), ost = b.getEast();
   const punkte = [];
